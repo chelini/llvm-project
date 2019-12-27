@@ -2739,6 +2739,13 @@ def SysVABI : DeclOrTypeAttr {
   let Documentation = [Undocumented];
 }
 
+def Syntax : Attr {
+  let Spellings = [Clang<"syntax">];
+  let Args = [StringArgument<"Name">];
+  let Subjects = SubjectList<[Function], ErrorDiag>;
+  let Documentation = [SyntaxAttrDocs];
+}
+
 def ThisCall : DeclOrTypeAttr {
   let Spellings = [GCC<"thiscall">, CustomKeyword<"__thiscall">,
                    CustomKeyword<"_thiscall">];
