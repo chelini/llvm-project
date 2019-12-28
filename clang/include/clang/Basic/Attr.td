@@ -2741,7 +2741,7 @@ def SysVABI : DeclOrTypeAttr {
 
 def Syntax : Attr {
   let Spellings = [Clang<"syntax">];
-  let Args = [StringArgument<"Name">];
+  let Args = [IdentifierArgument<"Name">];
   let Subjects = SubjectList<[Function], ErrorDiag>;
   let Documentation = [SyntaxAttrDocs];
 }
