@@ -9281,6 +9281,15 @@ ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D, const ParsedAttr &AL,
   case ParsedAttr::AT_AvailableOnlyInDefaultEvalMethod:
     handleAvailableOnlyInDefaultEvalMethod(S, D, AL);
     break;
+  case ParsedAttr::AT_ExcludeFromExplicitInstantiation:
+    handleSimpleAttribute<ExcludeFromExplicitInstantiationAttr>(S, D, AL);
+    break;
+  case ParsedAttr::AT_LTOVisibilityPublic:
+    handleSimpleAttribute<LTOVisibilityPublicAttr>(S, D, AL);
+    break;
+  case ParsedAttr::AT_Syntax:
+    // This was handled during parsing.
+    break;
 
   // Microsoft attributes:
   case ParsedAttr::AT_LayoutVersion:
