@@ -685,12 +685,53 @@ struct LastTensorLoadCanonicalization : public OpRewritePattern<ForOp> {
     return success();
   }
 };
+
+struct ReturnArgIfNotUsed : public OpRewritePattern<ForOp> {
+  using OpRewritePattern<ForOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ForOp forOp,
+                                PatternRewriter &rewriter) const override {
+    // no work to do. Exit early.
+    if (forOp.getNumRegionIterArgs() == 1 /*indVar*/)
+      return failure();
+
+    BlockAndValueMapping mapping;
+    auto yieldOp = cast<scf::YieldOp>(forOp.getBody()->getTerminator());
+
+    for (BlockArgument bbArg : forOp.getRegionIterArgs()) {
+      // if the bbArg has zero uses we can apply the following.
+      if (!bbArg.use_empty())
+        continue;
+
+      unsigned idx = bbArg.getArgNumber() - 1 /*indVar*/;
+      Value yieldVal = yieldOp.getOperand(idx);
+      Value inputVal = forOp.getOperand(idx + forOp.getNumControlOperands());
+
+      if (yieldVal == inputVal)
+        mapping.map(yieldVal, bbArg);
+    }
+
+    if (mapping.isEmpty())
+      return failure();
+
+    unsigned sizeOperands = yieldOp.getNumOperands();
+    for (unsigned idx = 0; idx < sizeOperands; idx++) {
+      Value newOperand = mapping.lookupOrDefault(yieldOp.getOperand(idx));
+      rewriter.startRootUpdate(yieldOp);
+      yieldOp.setOperand(idx, newOperand);
+      rewriter.finalizeRootUpdate(yieldOp);
+    }
+
+    return success();
+  }
+};
+
 } // namespace
 
 void ForOp::getCanonicalizationPatterns(OwningRewritePatternList &results,
                                         MLIRContext *context) {
   results.insert<ForOpIterArgsFolder, SimplifyTrivialLoops,
-                 LastTensorLoadCanonicalization>(context);
+                 LastTensorLoadCanonicalization, ReturnArgIfNotUsed>(context);
 }
 
 //===----------------------------------------------------------------------===//

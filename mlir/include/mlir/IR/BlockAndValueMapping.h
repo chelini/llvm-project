@@ -76,6 +76,9 @@ public:
   /// Clears all mappings held by the mapper.
   void clear() { valueMap.clear(); }
 
+  /// Check if the map is empty.
+  bool isEmpty() { return valueMap.empty(); }
+
   /// Returns a new mapper containing the inverse mapping.
   BlockAndValueMapping getInverse() const {
     BlockAndValueMapping result;
