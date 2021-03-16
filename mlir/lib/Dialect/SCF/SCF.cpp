@@ -701,12 +701,34 @@ struct LastTensorLoadCanonicalization : public OpRewritePattern<ForOp> {
     return success();
   }
 };
+
+struct PropagateConstantsInLoopBody : public OpRewritePattern<scf::ForOp> {
+  using OpRewritePattern<ForOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ForOp forOp,
+                                PatternRewriter &rewriter) const override {
+    if (!forOp.hasIterOperands())
+      return failure();
+
+    Block &block = forOp.getRegion().front();
+    auto yieldOp = cast<scf::YieldOp>(block.getTerminator());
+
+    for (auto it : llvm::zip(forOp.getIterOperands(), forOp.getRegionIterArgs(),
+                             yieldOp.getOperands())) {
+      auto cst = std::get<0>(it).getDefiningOp<ConstantOp>();
+      if (cst && (std::get<0>(it) == std::get<2>(it)))
+        std::get<1>(it).replaceAllUsesWith(cst.getResult());
+    }
+    return success();
+  }
+};
 } // namespace
 
 void ForOp::getCanonicalizationPatterns(OwningRewritePatternList &results,
                                         MLIRContext *context) {
   results.insert<ForOpIterArgsFolder, SimplifyTrivialLoops,
-                 LastTensorLoadCanonicalization>(context);
+                 LastTensorLoadCanonicalization, PropagateConstantsInLoopBody>(
+      context);
 }
 
 //===----------------------------------------------------------------------===//

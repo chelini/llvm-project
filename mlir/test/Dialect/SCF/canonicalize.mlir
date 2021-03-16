@@ -420,3 +420,23 @@ func @fold_away_iter_and_result_with_no_use(%arg0 : i32,
   // CHECK: return %[[FOR_RES]] : i32
   return %0#0 : i32
 }
+
+// -----
+
+// CHECK-LABEL: constant_prop_in_for
+//  CHECK-SAME: %[[A0:[0-9a-z]*]]: i32
+func @constant_prop_in_for(%arg0 : i32, 
+                  %ub : index, %lb : index, %step : index) -> (i32) {
+  // CHECK-NEXT: %[[C32:.*]] = constant 32 : i32
+  %cst = constant 32 : i32
+  // CHECK-NEXT: %[[FOR_RES:.*]] = scf.for {{.*}} iter_args({{.*}} = %[[A0]]) -> (i32) {
+  %0:2 = scf.for %arg1 = %lb to %ub step %step iter_args(%arg2 = %arg0, %arg3 = %cst)
+    -> (i32, i32) {
+    // CHECK-NEXT: %{{.*}} = addi %{{.*}}, %[[C32]] : i32
+    %1 = addi %arg2, %arg3 : i32
+    %2 = addi %1, %cst : i32
+    scf.yield %2, %cst : i32, i32
+  }
+  // CHECK: return %[[FOR_RES]] : i32
+  return %0#0 : i32
+}
