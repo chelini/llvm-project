@@ -380,4 +380,13 @@ def LinalgStrategyRemoveMarkersPass
   ];
 }
 
+def LinalgChainOpt
+    : Pass<"linalg-chain-opt", "FuncOp"> {
+  let summary = "Detect and optimize a matrix-chain multiplication";
+  let constructor = "mlir::createLinalgChainPass()";
+  let dependentDialects = [
+    "linalg::LinalgDialect"
+  ];
+}
+
 #endif // MLIR_DIALECT_LINALG_PASSES

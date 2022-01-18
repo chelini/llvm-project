@@ -201,6 +201,9 @@ public:
     return descriptor[indices];
   }
 
+  bool empty() { return descriptor.data != nullptr; }
+  void clear() { ~OwningMemRef(); }
+
 private:
   /// Custom deleter used to release the data buffer manager with the descriptor
   /// below.

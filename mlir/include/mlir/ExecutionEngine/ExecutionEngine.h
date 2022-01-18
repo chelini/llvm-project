@@ -176,6 +176,16 @@ public:
     return invokePacked(adapterName, argsArray);
   }
 
+  template <typename T>
+  llvm::Error invoke(StringRef funcName, llvm::SmallVector<T> args) {
+    const std::string adapterName =
+        std::string("_mlir_ciface_") + funcName.str();
+    llvm::SmallVector<void *> argsArray;
+    for (size_t i = 0; i < args.size(); i++)
+      argsArray.push_back(&args[i]);
+    return invokePacked(adapterName, argsArray);
+  }
+
   /// Set the target triple on the module. This is implicitly done when creating
   /// the engine.
   static bool setupTargetTriple(llvm::Module *llvmModule);
