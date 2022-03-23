@@ -251,6 +251,8 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
 
     for (int i = chain.size() - 1; i >= 0; i--)
       toErase.insert(chain[i]);
+
+    llvm::outs() << "Optimized\n";
   }
 
   void runOnOperation() override {

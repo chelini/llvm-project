@@ -385,7 +385,8 @@ def LinalgChainOpt
   let summary = "Detect and optimize a matrix-chain multiplication";
   let constructor = "mlir::createLinalgChainPass()";
   let dependentDialects = [
-    "linalg::LinalgDialect"
+    "linalg::LinalgDialect",
+    "scf::SCFDialect"
   ];
 }
 
