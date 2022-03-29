@@ -7,7 +7,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "PassDetail.h"
+#include "mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Linalg/ComprehensiveBufferize/ModuleBufferization.h"
 #include "mlir/Dialect/Linalg/Passes.h"
+#include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/SCF/BufferizableOpInterfaceImpl.h"
 #include "mlir/Pass/Pass.h"
 #include "llvm/Support/Debug.h"
 #include <queue>
@@ -15,10 +20,20 @@
 #define DEBUG_TYPE "matmul-chain"
 
 using namespace mlir;
+using namespace mlir::bufferization;
+using namespace mlir::linalg::comprehensive_bufferize;
 
 namespace {
 
 struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry
+        .insert<scf::SCFDialect, linalg::LinalgDialect, func::FuncDialect>();
+    linalg::registerBufferizableOpInterfaceExternalModels(registry);
+    scf::registerBufferizableOpInterfaceExternalModels(registry);
+    std_ext::registerModuleBufferizationExternalModels(registry);
+  }
 
   // Check 'out' to be the left operand for 'operation'.
   // 'out' is the value produced by another matmul operation.
@@ -36,13 +51,13 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
 
   // return the static shape for a ranked memref operand on success.
   LogicalResult getStaticShape(Type operand, SmallVectorImpl<int64_t> &shape) {
-    if (MemRefType memref = operand.dyn_cast_or_null<MemRefType>()) {
-      if (!memref.hasStaticShape()) {
+    if (ShapedType buffer = operand.dyn_cast_or_null<ShapedType>()) {
+      if (!buffer.hasStaticShape()) {
         return failure();
       }
-      assert(memref.getShape().size() == 2);
-      shape.push_back(memref.getShape()[0]);
-      shape.push_back(memref.getShape()[1]);
+      assert(buffer.getShape().size() == 2);
+      shape.push_back(buffer.getShape()[0]);
+      shape.push_back(buffer.getShape()[1]);
       return success();
     }
     return failure();
@@ -132,6 +147,44 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
     llvm::dbgs() << "\n-------------------------------------\n";
   }
 
+  Value materializeMemRef(OpBuilder &builder, Location loc,
+                          MemRefType resultType) {
+    // Materialize result.
+    Value buffer = builder.create<memref::AllocOp>(loc, resultType);
+
+    Attribute resultZeroAttr = builder.getZeroAttr(resultType.getElementType());
+    Value zero = builder.create<arith::ConstantOp>(loc, resultZeroAttr);
+    Value zeroIdx = builder.create<arith::ConstantIndexOp>(loc, 0);
+    Value oneIdx = builder.create<arith::ConstantIndexOp>(loc, 1);
+
+    SmallVector<Value> ubs;
+    Value dim1 =
+        builder.create<arith::ConstantIndexOp>(loc, resultType.getShape()[0]);
+    Value dim2 =
+        builder.create<arith::ConstantIndexOp>(loc, resultType.getShape()[1]);
+    ubs = {dim1, dim2};
+    SmallVector<Value> lbs = {zeroIdx, zeroIdx};
+    SmallVector<Value> steps = {oneIdx, oneIdx};
+
+    (void)scf::buildLoopNest(
+        builder, loc, lbs, ubs, steps,
+        [&](OpBuilder &b, Location loc, ValueRange localIvs) {
+          b.create<memref::StoreOp>(loc, zero, buffer, localIvs);
+        });
+    return buffer;
+  }
+
+  Value materializeTensor(OpBuilder &builder, Location loc,
+                          RankedTensorType resultType) {
+    // Materialize buffer.
+    Value buffer = builder.create<linalg::InitTensorOp>(
+        loc, resultType.getShape(), resultType.getElementType());
+    Attribute resultZeroAttr = builder.getZeroAttr(resultType.getElementType());
+    Value zero = builder.create<arith::ConstantOp>(loc, resultZeroAttr);
+    buffer = builder.create<linalg::FillOp>(loc, zero, buffer).result();
+    return buffer;
+  }
+
   Value rebuildChainImpl(ArrayRef<Value> operands, OpBuilder &builder,
                          Location loc, const std::vector<std::vector<long>> &s,
                          size_t i, size_t j) {
@@ -141,46 +194,44 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
       Value left = rebuildChainImpl(operands, builder, loc, s, i, s[i][j]);
       Value right = rebuildChainImpl(operands, builder, loc, s, s[i][j] + 1, j);
 
-      MemRefType leftType = left.getType().dyn_cast_or_null<MemRefType>();
-      assert(leftType && "expect to be a memref");
-      MemRefType rightType = right.getType().dyn_cast_or_null<MemRefType>();
-      assert(rightType && "expect to be a memref");
+      ShapedType leftType = left.getType().dyn_cast_or_null<ShapedType>();
+      assert(leftType && "expect to be a shaped type");
+      ShapedType rightType = right.getType().dyn_cast_or_null<ShapedType>();
+      assert(rightType && "expect to be a shaped type");
 
       SmallVector<int64_t, 2> shape = {leftType.getShape()[0],
                                        rightType.getShape()[1]};
-      MemRefType resultType = MemRefType::get(shape, leftType.getElementType());
 
-      // Materialize result.
-      Value buffer = builder.create<memref::AllocOp>(loc, resultType);
+      ShapedType resultType = Type();
+      bool tensorSemantics = false;
+      if (leftType.dyn_cast_or_null<MemRefType>())
+        resultType = MemRefType::get(shape, leftType.getElementType());
+      else if (leftType.dyn_cast_or_null<RankedTensorType>()) {
+        resultType = RankedTensorType::get(shape, leftType.getElementType());
+        tensorSemantics = true;
+      } else
+        assert("expect memref or ranked tensor type");
 
-      Attribute resultZeroAttr =
-          builder.getZeroAttr(resultType.getElementType());
-      Value zero = builder.create<arith::ConstantOp>(loc, resultZeroAttr);
-      Value zeroIdx = builder.create<arith::ConstantIndexOp>(loc, 0);
-      Value oneIdx = builder.create<arith::ConstantIndexOp>(loc, 1);
-
-      SmallVector<Value> ubs;
-      Value dim1 =
-          builder.create<arith::ConstantIndexOp>(loc, resultType.getShape()[0]);
-      Value dim2 =
-          builder.create<arith::ConstantIndexOp>(loc, resultType.getShape()[1]);
-      ubs = {dim1, dim2};
-      SmallVector<Value> lbs = {zeroIdx, zeroIdx};
-      SmallVector<Value> steps = {oneIdx, oneIdx};
-
-      (void)scf::buildLoopNest(
-          builder, loc, lbs, ubs, steps,
-          [&](OpBuilder &b, Location loc, ValueRange localIvs) {
-            b.create<memref::StoreOp>(loc, zero, buffer, localIvs);
-          });
+      assert(resultType != nullptr);
+      Value buffer =
+          (leftType.dyn_cast_or_null<MemRefType>() != nullptr)
+              ? materializeMemRef(builder, loc,
+                                  resultType.dyn_cast_or_null<MemRefType>())
+              : materializeTensor(
+                    builder, loc,
+                    resultType.dyn_cast_or_null<RankedTensorType>());
 
       Operation *op = builder.create<linalg::MatmulOp>(
           loc, ValueRange{left, right}, buffer);
       // skip walking the just created operation.
       visited.insert(op);
+      if (tensorSemantics)
+        return op->getResult(0);
       return buffer;
     }
   }
+
+  bool hasTensorSemantics(Operation *op) { return op->getNumResults() == 1; }
 
   // we are ready to emit IR.
   void rebuildChain(ArrayRef<Operation *> chain, ArrayRef<Value> operands,
@@ -195,8 +246,14 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
     Operation *tail = chain[chain.size() - 1];
     auto lastOrigMatmul = dyn_cast_or_null<linalg::MatmulOp>(tail);
     assert(lastOrigMatmul && "must be a linalg::matmul");
-    Value origOutputBuffer = lastOrigMatmul.outputs()[0];
-    builder.create<memref::CopyOp>(loc, val, origOutputBuffer);
+
+    if (hasTensorSemantics(lastOrigMatmul)) {
+      Value origOutputBuffer = lastOrigMatmul->getResult(0);
+      origOutputBuffer.replaceAllUsesWith(val);
+    } else {
+      Value origOutputBuffer = lastOrigMatmul.outputs()[0];
+      builder.create<memref::CopyOp>(loc, val, origOutputBuffer);
+    }
   }
 
   // optimize chain.
@@ -204,8 +261,10 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
     assert(chain.size() > 1 && "must be a chain!");
     SmallVector<long, 10> chainSizes;
     SmallVector<Value, 10> operands;
-    if (failed(getChainSizesAndOperands(chain, chainSizes, operands)))
+    if (failed(getChainSizesAndOperands(chain, chainSizes, operands))) {
+      LLVM_DEBUG(llvm::dbgs() << "Failed to get chain sizes and operands\n");
       return;
+    }
     const size_t n = chainSizes.size();
     std::vector<std::vector<long>> m(
         n, std::vector<long>(n, std::numeric_limits<long>::max()));
@@ -218,7 +277,8 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
     rebuildChain(chain, operands, s);
   }
 
-  void optimizeChain(linalg::MatmulOp mulOp) {
+  void optimizeChain(linalg::MatmulOp mulOp,
+                     AnalysisBufferizationState &state) {
     std::queue<Operation *> frontier;
     frontier.push(mulOp.getOperation());
     SmallVector<Operation *> chain = {mulOp.getOperation()};
@@ -231,6 +291,12 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
       if (!currMulOp)
         return;
       Value out = currMulOp.outputs()[0];
+      // linalg.matmul at the tensor level.
+      if (currMulOp->getNumResults() == 1) {
+        Value res = currMulOp.getResult(0);
+        if (state.areEquivalentBufferizedValues(out, res))
+          out = res;
+      }
       for (Operation *user : out.getUsers()) {
         if (user == currOp)
           continue;
@@ -246,22 +312,30 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
     if (chain.size() == 1)
       return;
 
-    // let's optmize.
+    llvm::outs() << "Chain detected\n";
+
+    // let's optimize.
     optimizeChainImpl(chain);
 
-    for (int i = chain.size() - 1; i >= 0; i--)
-      toErase.insert(chain[i]);
+    // for (int i = chain.size() - 1; i >= 0; i--)
+    //  toErase.insert(chain[i]);
 
     llvm::outs() << "Optimized\n";
   }
 
   void runOnOperation() override {
 
+    ModuleOp mod = getOperation();
+    AnalysisBufferizationOptions bo;
+    AnalysisBufferizationState state(mod, bo);
+    if (failed(analyzeOp(mod, state)))
+      return;
+
     getOperation().walk([&](linalg::MatmulOp mulOp) {
       if (visited.count(mulOp.getOperation()))
         return WalkResult::advance();
       visited.insert(mulOp.getOperation());
-      optimizeChain(mulOp);
+      optimizeChain(mulOp, state);
       return WalkResult::advance();
     });
 
@@ -277,6 +351,6 @@ private:
 
 } // namespace
 
-std::unique_ptr<OperationPass<FuncOp>> mlir::createLinalgChainPass() {
+std::unique_ptr<OperationPass<ModuleOp>> mlir::createLinalgChainPass() {
   return std::make_unique<LinalgChainOptPass>();
 }

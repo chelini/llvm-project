@@ -152,7 +152,7 @@ std::unique_ptr<OperationPass<FuncOp>> createLinalgStrategyLowerVectorsPass(
 std::unique_ptr<OperationPass<FuncOp>> createLinalgStrategyRemoveMarkersPass();
 
 /// Create a pass to optimize matrix chain multiplication.
-std::unique_ptr<OperationPass<FuncOp>> createLinalgChainPass();
+std::unique_ptr<OperationPass<ModuleOp>> createLinalgChainPass();
 
 //===----------------------------------------------------------------------===//
 // Registration
