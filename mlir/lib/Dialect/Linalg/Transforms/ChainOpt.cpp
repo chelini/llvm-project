@@ -317,8 +317,8 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
     // let's optimize.
     optimizeChainImpl(chain);
 
-    // for (int i = chain.size() - 1; i >= 0; i--)
-    //  toErase.insert(chain[i]);
+    for (int i = chain.size() - 1; i >= 0; i--)
+      toErase.insert(chain[i]);
 
     llvm::outs() << "Optimized\n";
   }
@@ -340,8 +340,10 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
     });
 
     // TODO: Check if this is safe.
-    for (Operation *op : toErase)
+    for (Operation *op : toErase) {
+      op->dropAllUses();
       op->erase();
+    }
   }
 
 private:
