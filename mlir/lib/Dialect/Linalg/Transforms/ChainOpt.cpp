@@ -185,14 +185,17 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
     return buffer;
   }
 
-  Value rebuildChainImpl(ArrayRef<Value> operands, OpBuilder &builder,
-                         Location loc, const std::vector<std::vector<long>> &s,
-                         size_t i, size_t j) {
+  Value rebuildChainImpl(Value outputChain, ArrayRef<Value> operands,
+                         OpBuilder &builder, Location loc,
+                         const std::vector<std::vector<long>> &s, size_t i,
+                         size_t j, int chainSize) {
     if (i == j)
       return operands[i - 1];
     else {
-      Value left = rebuildChainImpl(operands, builder, loc, s, i, s[i][j]);
-      Value right = rebuildChainImpl(operands, builder, loc, s, s[i][j] + 1, j);
+      Value left = rebuildChainImpl(outputChain, operands, builder, loc, s, i,
+                                    s[i][j], chainSize);
+      Value right = rebuildChainImpl(outputChain, operands, builder, loc, s,
+                                     s[i][j] + 1, j, chainSize);
 
       ShapedType leftType = left.getType().dyn_cast_or_null<ShapedType>();
       assert(leftType && "expect to be a shaped type");
@@ -213,13 +216,20 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
         assert("expect memref or ranked tensor type");
 
       assert(resultType != nullptr);
-      Value buffer =
-          (leftType.dyn_cast_or_null<MemRefType>() != nullptr)
-              ? materializeMemRef(builder, loc,
-                                  resultType.dyn_cast_or_null<MemRefType>())
-              : materializeTensor(
-                    builder, loc,
-                    resultType.dyn_cast_or_null<RankedTensorType>());
+
+      Value buffer = nullptr;
+      emittedSoFar++;
+      if (emittedSoFar == chainSize)
+        buffer = outputChain;
+      else {
+        buffer =
+            (leftType.dyn_cast_or_null<MemRefType>() != nullptr)
+                ? materializeMemRef(builder, loc,
+                                    resultType.dyn_cast_or_null<MemRefType>())
+                : materializeTensor(
+                      builder, loc,
+                      resultType.dyn_cast_or_null<RankedTensorType>());
+      }
 
       Operation *op = builder.create<linalg::MatmulOp>(
           loc, ValueRange{left, right}, buffer);
@@ -240,12 +250,14 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointAfter(chain[chain.size() - 1]);
     Location loc = chain[chain.size() - 1]->getLoc();
-    Value val =
-        rebuildChainImpl(operands, builder, loc, s, 1, chain.size() + 1);
 
     Operation *tail = chain[chain.size() - 1];
     auto lastOrigMatmul = dyn_cast_or_null<linalg::MatmulOp>(tail);
     assert(lastOrigMatmul && "must be a linalg::matmul");
+
+    Value outputChainBuffer = lastOrigMatmul.outputs()[0];
+    Value val = rebuildChainImpl(outputChainBuffer, operands, builder, loc, s,
+                                 1, chain.size() + 1, chain.size());
 
     if (hasTensorSemantics(lastOrigMatmul)) {
       Value origOutputBuffer = lastOrigMatmul->getResult(0);
@@ -343,12 +355,17 @@ struct LinalgChainOptPass : public LinalgChainOptBase<LinalgChainOptPass> {
     for (Operation *op : toErase) {
       op->dropAllUses();
       op->erase();
+      emittedSoFar--;
     }
+
+    assert(emittedSoFar == 0);
   }
 
 private:
   DenseSet<Operation *> visited;
   DenseSet<Operation *> toErase;
+
+  int emittedSoFar = 0;
 };
 
 } // namespace
