@@ -237,8 +237,9 @@ LogicalResult mlir::outlineIfOp(RewriterBase &b, scf::IfOp ifOp,
   return success();
 }
 
+template <typename LoopType>
 bool mlir::getInnermostParallelLoops(Operation *rootOp,
-                                     SmallVectorImpl<scf::ParallelOp> &result) {
+                                     SmallVectorImpl<LoopType> &result) {
   assert(rootOp != nullptr && "Root operation must not be a nullptr.");
   bool rootEnclosesPloops = false;
   for (Region &region : rootOp->getRegions()) {
@@ -246,7 +247,7 @@ bool mlir::getInnermostParallelLoops(Operation *rootOp,
       for (Operation &op : block) {
         bool enclosesPloops = getInnermostParallelLoops(&op, result);
         rootEnclosesPloops |= enclosesPloops;
-        if (auto ploop = dyn_cast<scf::ParallelOp>(op)) {
+        if (auto ploop = dyn_cast<LoopType>(op)) {
           rootEnclosesPloops = true;
 
           // Collect parallel loop if it is an innermost one.
@@ -258,6 +259,11 @@ bool mlir::getInnermostParallelLoops(Operation *rootOp,
   }
   return rootEnclosesPloops;
 }
+
+// explicit template instatiation for scf::ParallelOp.
+template bool
+mlir::getInnermostParallelLoops(Operation *,
+                                SmallVectorImpl<scf::ParallelOp> &);
 
 // Build the IR that performs ceil division of a positive value by a constant:
 //    ceildiv(a, B) = divis(a + (B-1), B)

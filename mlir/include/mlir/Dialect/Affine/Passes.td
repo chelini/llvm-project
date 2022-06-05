@@ -198,6 +198,11 @@ def AffineLoopTiling : Pass<"affine-loop-tile", "func::FuncOp"> {
   ];
 }
 
+def AffineParallelLoopTiling : Pass<"affine-parallel-loop-tile", "func::FuncOp"> {
+  let summary = "Tile affine parallel loop nests";
+  let constructor = "mlir::createAffineParallelLoopTilingPass()";
+}
+
 def AffineLoopUnroll : Pass<"affine-loop-unroll", "func::FuncOp"> {
   let summary = "Unroll affine loops";
   let constructor = "mlir::createLoopUnrollPass()";

@@ -110,6 +110,10 @@ createSuperVectorizePass(ArrayRef<int64_t> virtualVectorSize);
 /// Overload relying on pass options for initialization.
 std::unique_ptr<OperationPass<func::FuncOp>> createSuperVectorizePass();
 
+/// Creates a pass to tile affine.parallel.
+std::unique_ptr<OperationPass<func::FuncOp>>
+createAffineParallelLoopTilingPass();
+
 //===----------------------------------------------------------------------===//
 // Registration
 //===----------------------------------------------------------------------===//

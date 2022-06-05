@@ -49,6 +49,16 @@ struct LoopTiling : public AffineLoopTilingBase<LoopTiling> {
   bool avoidMaxMinBounds = true;
 };
 
+struct ParallelLoopTiling
+    : public AffineParallelLoopTilingBase<ParallelLoopTiling> {
+  ParallelLoopTiling() = default;
+
+  // Default tile size if nothing is provided.
+  constexpr static unsigned kDefaultTileSize = 4;
+
+  void runOnOperation() override;
+};
+
 } // namespace
 
 /// Creates a pass to perform loop tiling on all suitable loop nests of a
@@ -59,6 +69,10 @@ mlir::createLoopTilingPass(uint64_t cacheSizeBytes) {
 }
 std::unique_ptr<OperationPass<func::FuncOp>> mlir::createLoopTilingPass() {
   return std::make_unique<LoopTiling>();
+}
+std::unique_ptr<OperationPass<func::FuncOp>>
+mlir::createAffineParallelLoopTilingPass() {
+  return std::make_unique<ParallelLoopTiling>();
 }
 
 /// Reduces each tile size to the largest divisor of the corresponding trip
@@ -200,3 +214,21 @@ void LoopTiling::runOnOperation() {
 }
 
 constexpr unsigned LoopTiling::kDefaultTileSize;
+
+std::pair<AffineParallelOp, AffineParallelOp>
+tileParallelLoop(AffineParallelOp op, llvm::ArrayRef<int64_t> tileSizes) {
+  return {};
+}
+
+void ParallelLoopTiling::runOnOperation() {
+  // Parallel bands to tile.
+  SmallVector<AffineParallelOp, 2> innermostPloops;
+  // getInnermostParallelLoops<AffineParallelOp>(getOperation().getOperation(),
+  //                                             innermostPloops);
+  // for (AffineParallelOp ploop : innermostPloops) {
+  //   // TODO: Add reduction support.
+  //   if (ploop.getNumReductions() == 0)
+  //     tileParallelLoop(ploop)
+  // }
+  return;
+}

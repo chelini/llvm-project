@@ -87,8 +87,9 @@ LogicalResult outlineIfOp(RewriterBase &b, scf::IfOp ifOp, func::FuncOp *thenFn,
 /// Get a list of innermost parallel loops contained in `rootOp`. Innermost
 /// parallel loops are those that do not contain further parallel loops
 /// themselves.
+template <typename LoopType>
 bool getInnermostParallelLoops(Operation *rootOp,
-                               SmallVectorImpl<scf::ParallelOp> &result);
+                               SmallVectorImpl<LoopType> &result);
 
 /// Return the min/max expressions for `value` if it is an induction variable
 /// from scf.for or scf.parallel loop.

@@ -196,7 +196,8 @@ struct ParallelLoopTiling
 
   void runOnOperation() override {
     SmallVector<ParallelOp, 2> innermostPloops;
-    getInnermostParallelLoops(getOperation().getOperation(), innermostPloops);
+    getInnermostParallelLoops<scf::ParallelOp>(getOperation().getOperation(),
+                                               innermostPloops);
     for (ParallelOp ploop : innermostPloops) {
       // FIXME: Add reduction support.
       if (ploop.getNumReductions() == 0)
