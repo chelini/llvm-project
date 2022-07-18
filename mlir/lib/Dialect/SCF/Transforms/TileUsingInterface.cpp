@@ -46,6 +46,21 @@ scf::SCFTilingOptions::setTileSizes(ArrayRef<int64_t> ts) {
 // TileUsingSCFForOp pattern implementation.
 //===----------------------------------------------------------------------===//
 
+static bool canAvoidMin(ValueRange loopRange) {
+  auto isConstant = [](Value operand) {
+    return isa_and_nonnull<arith::ConstantIndexOp>(operand.getDefiningOp());
+  };
+  if (!llvm::all_of(loopRange, isConstant))
+    return false;
+  int64_t lb =
+      cast<arith::ConstantIndexOp>(loopRange[0].getDefiningOp()).value();
+  int64_t ub =
+      cast<arith::ConstantIndexOp>(loopRange[1].getDefiningOp()).value();
+  int64_t step =
+      cast<arith::ConstantIndexOp>(loopRange[2].getDefiningOp()).value();
+  return ((ub - lb) % step) == 0;
+}
+
 /// Generate an empty loop nest that represents the tiled loop nest shell.
 /// - `loopRanges` specifies the lb, ub and step of the untiled iteration space.
 /// - `tileSizeVals` is the tile sizes to use. Zero represent untiled loops.
@@ -87,10 +102,16 @@ generateTileLoopNest(OpBuilder &builder, Location loc,
         tileSizeVals[loopRange.index()], ValueRange{},
         [&](OpBuilder &bodyBuilder, Location bodyLoc, Value iv,
             ValueRange /*iterArgs*/) {
-          Value boundedTileSize = builder.create<AffineMinOp>(
-              bodyLoc, minMap,
-              ValueRange{iv, tileSizeVals[loopRange.index()],
-                         loopRange.value().size});
+          bool notRequireMin = canAvoidMin(
+              ValueRange{loopRange.value().offset, loopRange.value().size,
+                         tileSizeVals[loopRange.index()]});
+          Value boundedTileSize =
+              (notRequireMin)
+                  ? tileSizeVals[loopRange.index()]
+                  : builder.create<AffineMinOp>(
+                        bodyLoc, minMap,
+                        ValueRange{iv, tileSizeVals[loopRange.index()],
+                                   loopRange.value().size});
           sizes[loopRange.index()] = boundedTileSize;
           builder.create<scf::YieldOp>(loc);
         });
