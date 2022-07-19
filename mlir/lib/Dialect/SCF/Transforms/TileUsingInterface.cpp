@@ -17,6 +17,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/Utils/Utils.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Interfaces/TilingInterface.h"
@@ -286,6 +287,24 @@ static Optional<OpResult> getFusableProducer(Value v) {
   return v.cast<OpResult>();
 }
 
+// replace iter args of the outer most loop with region args of the inner most
+// one.
+static void replaceIterArgs(scf::ForOp outerFor, scf::ForOp innerFor,
+                            PatternRewriter &rewriter) {
+  assert(outerFor.getNumIterOperands() == innerFor.getNumIterOperands() &&
+         "expect same number of iter args");
+  Region &body = innerFor.getRegion();
+  BlockAndValueMapping mapping;
+  mapping.map(outerFor.getIterOperands(), innerFor.getRegionIterArgs());
+  body.walk([&](tensor::ExtractSliceOp sliceOp) {
+    Value source = sliceOp.getSource();
+    if (mapping.contains(source))
+      rewriter.updateRootInPlace(sliceOp, [&]() {
+        sliceOp.getSourceMutable().assign(mapping.lookup(source));
+      });
+  });
+}
+
 FailureOr<scf::SCFTileAndFuseResult>
 scf::TileConsumerAndFuseProducersUsingSCFForOp::returningMatchAndRewrite(
     TilingInterface op, PatternRewriter &rewriter) const {
@@ -400,6 +419,8 @@ scf::TileConsumerAndFuseProducersUsingSCFForOp::returningMatchAndRewrite(
             operandNumber, unfusedProducerOpDestValues[resultNumber]);
       }
     }
+    replaceIterArgs(outerMostTiledLoop, tileAndFuseResult.loops.back(),
+                    rewriter);
   }
   return tileAndFuseResult;
 }
