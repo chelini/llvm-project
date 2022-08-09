@@ -110,6 +110,11 @@ struct SCFTileAndFuseResult {
   SmallVector<Operation *> tiledAndFusedOps;
   SmallVector<scf::ForOp> loops;
 };
+
+using checkProducerFn =
+    std::function<LogicalResult(ArrayRef<Range> rootIterationDomain,
+                                Operation *producer, OpBuilder &builder)>;
+
 struct TileConsumerAndFuseProducersUsingSCFForOp
     : public OpInterfaceRewritePattern<TilingInterface> {
 
@@ -127,7 +132,8 @@ struct TileConsumerAndFuseProducersUsingSCFForOp
   /// `matchAndRewrite` implementation that returns the significant transformed
   /// pieces of IR.
   FailureOr<SCFTileAndFuseResult>
-  returningMatchAndRewrite(TilingInterface op, PatternRewriter &rewriter) const;
+  returningMatchAndRewrite(TilingInterface op, PatternRewriter &rewriter,
+                           checkProducerFn = nullptr) const;
 
   LogicalResult matchAndRewrite(TilingInterface op,
                                 PatternRewriter &rewriter) const override {

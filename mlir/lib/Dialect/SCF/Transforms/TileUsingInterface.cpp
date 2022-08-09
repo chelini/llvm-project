@@ -397,13 +397,14 @@ static void replaceIterArgs(scf::ForOp outerFor, scf::ForOp innerFor,
 
 FailureOr<scf::SCFTileAndFuseResult>
 scf::TileConsumerAndFuseProducersUsingSCFForOp::returningMatchAndRewrite(
-    TilingInterface op, PatternRewriter &rewriter) const {
+    TilingInterface op, PatternRewriter &rewriter, checkProducerFn fn) const {
   // This transformation is only valid for ops that return values (i.e. not
   // valid to use with operations that have memref operands).
   if (!op->getNumResults()) {
     return rewriter.notifyMatchFailure(
         op, "invalid pattern for op with no results");
   }
+  SmallVector<Range> iterationDomain = op.getIterationDomain(rewriter);
 
   // 1. First tile the consumer.
   SCFTileAndFuseResult tileAndFuseResult;
@@ -444,6 +445,10 @@ scf::TileConsumerAndFuseProducersUsingSCFForOp::returningMatchAndRewrite(
     Optional<OpResult> fusableProducer =
         getFusableProducer(candidateSliceOp.getSource());
     if (!fusableProducer)
+      continue;
+
+    if (fn &&
+        failed(fn(iterationDomain, fusableProducer->getDefiningOp(), rewriter)))
       continue;
 
     // 2c. Generate the tiled implementation of the producer of the source
