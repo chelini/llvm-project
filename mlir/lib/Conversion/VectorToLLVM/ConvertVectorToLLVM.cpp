@@ -1082,7 +1082,10 @@ public:
     VectorType vectorType = printType.dyn_cast<VectorType>();
     Type eltType = vectorType ? vectorType.getElementType() : printType;
     Operation *printer;
-    if (eltType.isF32()) {
+    if (eltType.isBF16()) {
+      printer =
+          LLVM::lookupOrCreatePrintBF16Fn(printOp->getParentOfType<ModuleOp>());
+    } else if (eltType.isF32()) {
       printer =
           LLVM::lookupOrCreatePrintF32Fn(printOp->getParentOfType<ModuleOp>());
     } else if (eltType.isF64()) {
