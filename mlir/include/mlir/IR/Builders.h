@@ -60,6 +60,7 @@ public:
 
   // Types.
   FloatType getBF16Type();
+  FloatType getPackedBF16Type();
   FloatType getF16Type();
   FloatType getF32Type();
   FloatType getF64Type();

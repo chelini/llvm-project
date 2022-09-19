@@ -31,6 +31,7 @@ OptionalParseResult Parser::parseOptionalType(Type &type) {
   case Token::kw_vector:
   case Token::inttype:
   case Token::kw_bf16:
+  case Token::kw_pbf16:
   case Token::kw_f16:
   case Token::kw_f32:
   case Token::kw_f64:
@@ -249,7 +250,7 @@ Type Parser::parseMemRefType() {
 ///                       | none-type
 ///
 ///   index-type ::= `index`
-///   float-type ::= `f16` | `bf16` | `f32` | `f64` | `f80` | `f128`
+///   float-type ::= `f16` | `bf16` | `pbf16` | `f32` | `f64` | `f80` | `f128`
 ///   none-type ::= `none`
 ///
 Type Parser::parseNonFunctionType() {
@@ -289,6 +290,9 @@ Type Parser::parseNonFunctionType() {
   case Token::kw_bf16:
     consumeToken(Token::kw_bf16);
     return builder.getBF16Type();
+  case Token::kw_pbf16:
+    consumeToken(Token::kw_pbf16);
+    return builder.getPackedBF16Type();
   case Token::kw_f16:
     consumeToken(Token::kw_f16);
     return builder.getF16Type();

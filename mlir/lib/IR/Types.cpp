@@ -24,6 +24,7 @@ bool Type::isF32() const { return isa<Float32Type>(); }
 bool Type::isF64() const { return isa<Float64Type>(); }
 bool Type::isF80() const { return isa<Float80Type>(); }
 bool Type::isF128() const { return isa<Float128Type>(); }
+bool Type::isPackedBF16() const { return isa<PackedBF16Type>(); }
 
 bool Type::isIndex() const { return isa<IndexType>(); }
 

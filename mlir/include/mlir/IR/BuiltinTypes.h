@@ -41,6 +41,7 @@ public:
 
   // Convenience factories.
   static FloatType getBF16(MLIRContext *ctx);
+  static FloatType getPackedBF16(MLIRContext *ctx);
   static FloatType getF16(MLIRContext *ctx);
   static FloatType getF32(MLIRContext *ctx);
   static FloatType getF64(MLIRContext *ctx);
@@ -374,11 +375,15 @@ inline bool BaseMemRefType::isValidElementType(Type type) {
 
 inline bool FloatType::classof(Type type) {
   return type.isa<BFloat16Type, Float16Type, Float32Type, Float64Type,
-                  Float80Type, Float128Type>();
+                  Float80Type, Float128Type, PackedBF16Type>();
 }
 
 inline FloatType FloatType::getBF16(MLIRContext *ctx) {
   return BFloat16Type::get(ctx);
+}
+
+inline FloatType FloatType::getPackedBF16(MLIRContext *ctx) {
+  return PackedBF16Type::get(ctx);
 }
 
 inline FloatType FloatType::getF16(MLIRContext *ctx) {

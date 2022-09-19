@@ -44,6 +44,9 @@ public:
             .Case([this](BFloat16Type) {
               return llvm::Type::getBFloatTy(context);
             })
+            .Case([this](PackedBF16Type) {
+              return llvm::Type::getBFloatTy(context);
+            })
             .Case(
                 [this](Float32Type) { return llvm::Type::getFloatTy(context); })
             .Case([this](Float64Type) {

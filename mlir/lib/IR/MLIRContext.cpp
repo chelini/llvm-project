@@ -207,6 +207,7 @@ public:
 
   /// Cached Type Instances.
   BFloat16Type bf16Ty;
+  PackedBF16Type packedBf16Ty;
   Float16Type f16Ty;
   Float32Type f32Ty;
   Float64Type f64Ty;
@@ -277,6 +278,7 @@ MLIRContext::MLIRContext(const DialectRegistry &registry, Threading setting)
   //// Types.
   /// Floating-point Types.
   impl->bf16Ty = TypeUniquer::get<BFloat16Type>(this);
+  impl->packedBf16Ty = TypeUniquer::get<PackedBF16Type>(this);
   impl->f16Ty = TypeUniquer::get<Float16Type>(this);
   impl->f32Ty = TypeUniquer::get<Float32Type>(this);
   impl->f64Ty = TypeUniquer::get<Float64Type>(this);
@@ -808,6 +810,11 @@ StorageUniquer &MLIRContext::getTypeUniquer() { return getImpl().typeUniquer; }
 BFloat16Type BFloat16Type::get(MLIRContext *context) {
   return context->getImpl().bf16Ty;
 }
+
+PackedBF16Type PackedBF16Type::get(MLIRContext *context) {
+  return context->getImpl().packedBf16Ty;
+}
+
 Float16Type Float16Type::get(MLIRContext *context) {
   return context->getImpl().f16Ty;
 }

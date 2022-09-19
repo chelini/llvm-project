@@ -146,36 +146,41 @@ enum TypeCode {
   ///
   kBFloat16Type = 3,
 
+  ///   PackedBF16Type {
+  ///   }
+  ///
+  kPackedBF16Type = 4,
+
   ///   Float16Type {
   ///   }
   ///
-  kFloat16Type = 4,
+  kFloat16Type = 5,
 
   ///   Float32Type {
   ///   }
   ///
-  kFloat32Type = 5,
+  kFloat32Type = 6,
 
   ///   Float64Type {
   ///   }
   ///
-  kFloat64Type = 6,
+  kFloat64Type = 7,
 
   ///   Float80Type {
   ///   }
   ///
-  kFloat80Type = 7,
+  kFloat80Type = 8,
 
   ///   Float128Type {
   ///   }
   ///
-  kFloat128Type = 8,
+  kFloat128Type = 9,
 
   ///   ComplexType {
   ///     elementType: Type
   ///   }
   ///
-  kComplexType = 9,
+  kComplexType = 10,
 
   ///   MemRefType {
   ///     shape: svarint[],
@@ -183,7 +188,7 @@ enum TypeCode {
   ///     layout: Attribute
   ///   }
   ///
-  kMemRefType = 10,
+  kMemRefType = 11,
 
   ///   MemRefTypeWithMemSpace {
   ///     memorySpace: Attribute,
@@ -192,19 +197,19 @@ enum TypeCode {
   ///     layout: Attribute
   ///   }
   /// Variant of MemRefType with non-default memory space.
-  kMemRefTypeWithMemSpace = 11,
+  kMemRefTypeWithMemSpace = 12,
 
   ///   NoneType {
   ///   }
   ///
-  kNoneType = 12,
+  kNoneType = 13,
 
   ///   RankedTensorType {
   ///     shape: svarint[],
   ///     elementType: Type,
   ///   }
   ///
-  kRankedTensorType = 13,
+  kRankedTensorType = 14,
 
   ///   RankedTensorTypeWithEncoding {
   ///     encoding: Attribute,
@@ -212,38 +217,38 @@ enum TypeCode {
   ///     elementType: Type
   ///   }
   /// Variant of RankedTensorType with an encoding.
-  kRankedTensorTypeWithEncoding = 14,
+  kRankedTensorTypeWithEncoding = 15,
 
   ///   TupleType {
   ///     elementTypes: Type[]
   ///   }
-  kTupleType = 15,
+  kTupleType = 16,
 
   ///   UnrankedMemRefType {
   ///     shape: svarint[]
   ///   }
   ///
-  kUnrankedMemRefType = 16,
+  kUnrankedMemRefType = 17,
 
   ///   UnrankedMemRefTypeWithMemSpace {
   ///     memorySpace: Attribute,
   ///     shape: svarint[]
   ///   }
   /// Variant of UnrankedMemRefType with non-default memory space.
-  kUnrankedMemRefTypeWithMemSpace = 17,
+  kUnrankedMemRefTypeWithMemSpace = 18,
 
   ///   UnrankedTensorType {
   ///     elementType: Type
   ///   }
   ///
-  kUnrankedTensorType = 18,
+  kUnrankedTensorType = 19,
 
   ///   VectorType {
   ///     shape: svarint[],
   ///     elementType: Type
   ///   }
   ///
-  kVectorType = 19,
+  kVectorType = 20,
 
   ///   VectorTypeWithScalableDims {
   ///     numScalableDims: varint,
@@ -251,7 +256,7 @@ enum TypeCode {
   ///     elementType: Type
   ///   }
   /// Variant of VectorType with scalable dimensions.
-  kVectorTypeWithScalableDims = 20,
+  kVectorTypeWithScalableDims = 21,
 };
 
 } // namespace builtin_encoding
@@ -711,6 +716,8 @@ Type BuiltinDialectBytecodeInterface::readType(
     return readFunctionType(reader);
   case builtin_encoding::kBFloat16Type:
     return BFloat16Type::get(getContext());
+  case builtin_encoding::kPackedBF16Type:
+    return PackedBF16Type::get(getContext());
   case builtin_encoding::kFloat16Type:
     return Float16Type::get(getContext());
   case builtin_encoding::kFloat32Type:
@@ -766,6 +773,9 @@ LogicalResult BuiltinDialectBytecodeInterface::writeType(
       })
       .Case([&](BFloat16Type) {
         return writer.writeVarInt(builtin_encoding::kBFloat16Type), success();
+      })
+      .Case([&](PackedBF16Type) {
+        return writer.writeVarInt(builtin_encoding::kPackedBF16Type), success();
       })
       .Case([&](Float16Type) {
         return writer.writeVarInt(builtin_encoding::kFloat16Type), success();
