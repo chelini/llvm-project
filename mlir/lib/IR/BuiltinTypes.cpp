@@ -98,6 +98,8 @@ unsigned FloatType::getWidth() {
     return 80;
   if (isa<Float128Type>())
     return 128;
+  if (isa<PackedBF16Type>())
+    return 16;
   llvm_unreachable("unexpected float type");
 }
 
@@ -115,6 +117,8 @@ const llvm::fltSemantics &FloatType::getFloatSemantics() {
     return APFloat::x87DoubleExtended();
   if (isa<Float128Type>())
     return APFloat::IEEEquad();
+  if (isa<PackedBF16Type>())
+    return APFloat::BFloat();
   llvm_unreachable("non-floating point type used");
 }
 
@@ -122,7 +126,7 @@ FloatType FloatType::scaleElementBitwidth(unsigned scale) {
   if (!scale)
     return FloatType();
   MLIRContext *ctx = getContext();
-  if (isF16() || isBF16()) {
+  if (isF16() || isBF16() || isPackedBF16()) {
     if (scale == 2)
       return FloatType::getF32(ctx);
     if (scale == 4)

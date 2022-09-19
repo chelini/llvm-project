@@ -765,6 +765,7 @@ bool mlir::LLVM::isCompatibleOuterType(Type type) {
       Float64Type,
       Float80Type,
       Float128Type,
+      PackedBF16Type,
       LLVMArrayType,
       LLVMFunctionType,
       LLVMLabelType,
@@ -865,8 +866,9 @@ bool mlir::LLVM::isCompatibleType(Type type) {
 }
 
 bool mlir::LLVM::isCompatibleFloatingPointType(Type type) {
-  return type.isa<BFloat16Type, Float16Type, Float32Type, Float64Type,
-                  Float80Type, Float128Type, LLVMPPCFP128Type>();
+  return type
+      .isa<BFloat16Type, Float16Type, Float32Type, Float64Type, Float80Type,
+           Float128Type, LLVMPPCFP128Type, PackedBF16Type>();
 }
 
 bool mlir::LLVM::isCompatibleVectorType(Type type) {
@@ -880,7 +882,7 @@ bool mlir::LLVM::isCompatibleVectorType(Type type) {
     if (auto intType = elementType.dyn_cast<IntegerType>())
       return intType.isSignless();
     return elementType.isa<BFloat16Type, Float16Type, Float32Type, Float64Type,
-                           Float80Type, Float128Type>();
+                           Float80Type, Float128Type, PackedBF16Type>();
   }
   return false;
 }
@@ -965,7 +967,7 @@ llvm::TypeSize mlir::LLVM::getPrimitiveTypeSizeInBits(Type type) {
          "expected a type compatible with the LLVM dialect");
 
   return llvm::TypeSwitch<Type, llvm::TypeSize>(type)
-      .Case<BFloat16Type, Float16Type>(
+      .Case<BFloat16Type, Float16Type, PackedBF16Type>(
           [](Type) { return llvm::TypeSize::Fixed(16); })
       .Case<Float32Type>([](Type) { return llvm::TypeSize::Fixed(32); })
       .Case<Float64Type, LLVMX86MMXType>(

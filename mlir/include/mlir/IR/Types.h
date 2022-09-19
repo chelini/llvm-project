@@ -127,6 +127,7 @@ public:
   bool isF64() const;
   bool isF80() const;
   bool isF128() const;
+  bool isPackedBF16() const;
 
   /// Return true if this is an integer type with the specified width.
   bool isInteger(unsigned width) const;

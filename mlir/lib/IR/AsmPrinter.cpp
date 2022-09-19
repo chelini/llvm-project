@@ -2078,6 +2078,7 @@ void AsmPrinter::Impl::printType(Type type) {
       })
       .Case<IndexType>([&](Type) { os << "index"; })
       .Case<BFloat16Type>([&](Type) { os << "bf16"; })
+      .Case<PackedBF16Type>([&](Type) { os << "pbf16"; })
       .Case<Float16Type>([&](Type) { os << "f16"; })
       .Case<Float32Type>([&](Type) { os << "f32"; })
       .Case<Float64Type>([&](Type) { os << "f64"; })
