@@ -77,6 +77,10 @@ FailureOr<SCFTilingResult> tileUsingSCFForOp(RewriterBase &rewriter,
                                              TilingInterface op,
                                              const SCFTilingOptions &options);
 
+using SCFcontrolFusionWithProducerFn =
+    std::function<LogicalResult(ArrayRef<Range> rootIterationDomain,
+                                Operation *producer, OpBuilder &builder)>;
+
 /// Options used to control tile + fuse.
 struct SCFTileAndFuseOptions {
   /// The tiling options used to control the tiling of the consumer.
@@ -85,6 +89,11 @@ struct SCFTileAndFuseOptions {
     tilingOptions = options;
     return *this;
   }
+  /// Callback to have more fine-grain control over the fusion.
+  /// `rootIterationDomain` represents the original iteration domain of the
+  /// consumer (before tiling), and `producer` is a pointer to the current
+  /// candidate operation.
+  SCFcontrolFusionWithProducerFn controlFusionWithProducerFn = nullptr;
 };
 
 /// Transformation information returned after tile and fuse.

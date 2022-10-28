@@ -441,6 +441,8 @@ mlir::scf::tileConsumerAndFuseProducerGreedilyUsingSCFForOp(
         consumer, "invalid pattern for op with no results");
   }
 
+  SmallVector<Range> iterationDomain = consumer.getIterationDomain(rewriter);
+
   // 1. First tile the consumer.
   scf::SCFTileAndFuseResult tileAndFuseResult;
   llvm::SmallDenseMap<Value, int64_t> yieldedValueToResultNumber;
@@ -492,6 +494,11 @@ mlir::scf::tileConsumerAndFuseProducerGreedilyUsingSCFForOp(
         getUntiledProducerFromSliceSource(&candidateSliceOp->getOpOperand(0),
                                           tileAndFuseResult.loops);
     if (!fusableProducer)
+      continue;
+
+    if (options.controlFusionWithProducerFn &&
+        failed(options.controlFusionWithProducerFn(
+            iterationDomain, fusableProducer.getDefiningOp(), rewriter)))
       continue;
 
     // 2c. Generate the tiled implementation of the producer of the source
