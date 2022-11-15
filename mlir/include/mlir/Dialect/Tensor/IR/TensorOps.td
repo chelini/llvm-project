@@ -1664,6 +1664,163 @@ def Tensor_SplatOp : Tensor_Op<"splat", [
 }
 
 //===----------------------------------------------------------------------===//
+// PackOp
+//===----------------------------------------------------------------------===//
+
+class Tensor_RelayoutOp<string mnemonic, list<Trait> traits = []> :
+      Tensor_Op<mnemonic, !listconcat(traits, [
+        DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>,
+        DestinationStyleOpInterface,
+        Pure,
+        DeclareOpInterfaceMethods<ReifyRankedShapedTypeOpInterface>,
+        TypesMatchWith<"result type matches type of dest",
+                   "dest", "result",
+                   "$_self">])> {
+
+  code commonExtraClassDeclaration = [{
+    int64_t getSourceRank() { return getSource().getType().getRank(); };
+    int64_t getDestRank() { return getDest().getType().getRank(); };
+    RankedTensorType getSourceType() { 
+      return getSource().getType().cast<RankedTensorType>(); };
+    RankedTensorType getDestType() {
+      return getDest().getType().cast<RankedTensorType>(); };
+
+    // Return position for init operand. Init operand is `dest`. 
+    std::pair<int64_t, int64_t> getDpsInitsPositionRange() {
+      return {1, 2}; // `dest` operand
+    }
+    
+    // Return a mapping from positions `dims_pos` to their tile factors.
+    DenseMap<int64_t, OpFoldResult> getDimAndTileMapping();
+    
+    // Return the tile sizes as OpFoldResult.
+    SmallVector<OpFoldResult> getMixedTiles();
+    
+    // Return the tile sizes as `int64_t`. If a tile size is dynamic 
+    // a sentinel `kDynamicSize` is introduced at that position in 
+    // the returned vector.
+    SmallVector<int64_t> getStaticTiles();
+  }];
+  
+  let hasVerifier = 1;
+}
+
+def Tensor_PackOp : Tensor_RelayoutOp<"pack", [
+    AttrSizedOperandSegments]> {
+  let summary = "tensor pack operation";
+  let description = [{
+    The pack operation converts an `input` into a tiled and packed layout. The
+    dimensions to be tiled are obtained from `inner_dims_pos` and the size of the
+    tile is obtained from `inner_tiles`. The dimensions listed in `inner_dims_pos`
+    do not need to be contiguous in which case the tile will get transposed.  We
+    handle only full tiles if `padding_value` is not set; it is UB if the tile does
+    not perfectly divide the dimension. If `padding_value` is set, it will pad
+    along high dimensions, i.e., it pads at the bottom and on the right if the
+    input has rank 2, and the result type shape, will be dynamic in any dimension
+    if and only if the input shape is. As optional input, the operation takes
+    `outer_dims_perm` that allows to permute the tiled loops.
+
+    Example NC_to_NCnc:
+
+    ```mlir
+    %pack = tensor.pack %source inner_dims_pos = [0, 1]
+      inner_tiles = [8, 32] into %dest : tensor<128x256xf32> -> tensor<16x8x8x32xf32>
+    ```
+    Example CK to KCck
+
+    ```mlir
+    tensor.pack %source outer_dims_perm = [1, 0] inner_dims_pos = [0, 1]
+      inner_tiles = [8, 32] into %dest : tensor<128x256xf32> -> tensor<8x16x8x32xf32>
+    ```
+
+    In all cases, dimension at position 0 in the input tensor (128) is tiled
+    with a factor of 8, while dimension at position 1 (256) is tiled with a factor
+    of 32. In the second example, the outer loop are interchanged.
+
+    Example NC_to_NCnc with padding:
+
+    ```mlir
+    tensor.pack %arg padding_value(%pad : f32) inner_dims_pos = [0, 1]
+      inner_tiles = [8, 2] into %arg1 : tensor<13x15xf32> -> tensor<2x8x8x2xf32>
+    ```
+
+  }];
+  let arguments = (ins AnyRankedTensor:$source,
+                       AnyRankedTensor:$dest,
+                       Optional<AnyType>:$padding_value,
+                       DefaultValuedOptionalAttr<I64ArrayAttr, "{}">:$outer_dims_perm,
+                       I64ArrayAttr:$inner_dims_pos,
+                       Variadic<Index>:$inner_tiles,
+                       I64ArrayAttr:$static_inner_tiles);
+  let results = (outs AnyRankedTensor:$result);
+  let assemblyFormat = [{
+    $source 
+    (`padding_value` `(` $padding_value^ `:` type($padding_value) `)`)?
+    (`outer_dims_perm` `=` $outer_dims_perm^)?  
+    `inner_dims_pos` `=` $inner_dims_pos
+    `inner_tiles` `=`
+    custom<DynamicIndexList>($inner_tiles, $static_inner_tiles,
+                             "ShapedType::kDynamicSize")
+    `into` $dest attr-dict `:` type($source) `->` type($dest)
+  }];
+
+  let extraClassDeclaration = commonExtraClassDeclaration # [{
+    // Method to get the `ShapedType` of the result based on the inner tiles,
+    // position of the inner tiles (innerDimsPos)  and interchange of the 
+    // outer loops (outerDimsPerm).
+    static ShapedType getPackedType(ShapedType sourceType,
+        ArrayRef<int64_t> innerTileSizes, ArrayRef<int64_t> innerDimsPos,
+        ArrayRef<int64_t> outerDimsPerm = {});
+  }]; 
+}
+
+//===----------------------------------------------------------------------===//
+// UnPackOp
+//===----------------------------------------------------------------------===//
+
+def Tensor_UnPackOp : Tensor_RelayoutOp<"unpack"> {
+  let summary = "tensor unapack operation";
+  let description = [{
+    The unpack operation converts a tiled and packed input to an unpacked
+    output. See `pack` for more details on `inner_tiles` and `dims_pos`; it is UB
+    if the tile does not perfectly divide the dimension. Optionally, the operation
+    also supports permuting the tiled loops.
+
+    Example NCnc_to_NC:
+
+    ```mlir
+    tensor.unpack %source inner_dims_pos = [0, 1]
+      inner_tiles = [8, 32] into %dest : tensor<16x8x8x32xf32> -> tensor<128x256xf32>
+    ```
+
+    Example CK to KCck:
+
+    ```mlir
+    tensor.unapck %source outer_dims_perm = [1, 0] inner_dims_pos = [0, 1] 
+      inner_tiles = [8, 32] into %dest : tensor<8x16x8x32xf32> -> tensor<128x256xf32>
+    ```
+  }];
+  let arguments = (ins AnyRankedTensor:$source,
+                       AnyRankedTensor:$dest,
+                       DefaultValuedOptionalAttr<I64ArrayAttr, "{}">:$outer_dims_perm,
+                       I64ArrayAttr:$inner_dims_pos,
+                       Variadic<Index>:$inner_tiles,
+                       I64ArrayAttr:$static_inner_tiles);
+  let results = (outs AnyRankedTensor:$result);
+  let assemblyFormat = [{
+    $source
+    (`outer_dims_perm` `=` $outer_dims_perm^)?
+    `inner_dims_pos` `=` $inner_dims_pos
+    `inner_tiles` `=`
+    custom<DynamicIndexList>($inner_tiles, $static_inner_tiles,
+                             "ShapedType::kDynamicSize")
+    `into` $dest attr-dict `:` type($source) `->` type($dest)
+  }];
+
+  let extraClassDeclaration = commonExtraClassDeclaration;
+}
+
+//===----------------------------------------------------------------------===//
 // YieldOp
 //===----------------------------------------------------------------------===//
 
