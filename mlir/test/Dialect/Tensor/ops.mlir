@@ -293,3 +293,52 @@ func.func @gather_scatter(
     (tensor<1x3x4xf32>, tensor<4x5x6xf32>, tensor<1x3x2xi32>) -> tensor<4x5x6xf32>
   return
 }
+
+func.func @pack_nc_to_ncnc(%source: tensor<128x256xf32>, %dest: tensor<4x16x16x32xf32>) -> tensor<128x256xf32> {
+  %0 = tensor.pack %source inner_dims_pos = [0, 1] inner_tiles = [16, 32] into %dest : tensor<128x256xf32> -> tensor<4x16x16x32xf32>
+  %1 = tensor.empty() : tensor<128x256xf32>
+  %2 = tensor.unpack %0 inner_dims_pos = [0, 1] inner_tiles = [16, 32] into %1 : tensor<4x16x16x32xf32> -> tensor<128x256xf32>
+  return %2 : tensor<128x256xf32>
+}
+
+// CHECK: func.func @pack_nc_to_ncnc(
+// CHECK-SAME:  %[[ARG0:.*]]: tensor<128x256xf32>,
+// CHECK-SAME:  %[[ARG1:.*]]: tensor<4x16x16x32xf32>) -> tensor<128x256xf32> {
+// CHECK: %[[PACKED:.*]] = tensor.pack %[[ARG0]] inner_dims_pos = [0, 1] inner_tiles = [16, 32] into %[[ARG1]] : tensor<128x256xf32> -> tensor<4x16x16x32xf32>
+// CHECK: %[[BUFF:.*]] = tensor.empty() : tensor<128x256xf32>
+// CHECK: %[[UNPACKED:.*]] = tensor.unpack %[[PACKED]] inner_dims_pos = [0, 1] inner_tiles = [16, 32] into %[[BUFF]] : tensor<4x16x16x32xf32> -> tensor<128x256xf32>
+// CHECK: return %[[UNPACKED]] : tensor<128x256xf32>
+// CHECK: }
+
+func.func @pack_ck_kcck(%source: tensor<128x256xf32>, %dest: tensor<4x16x16x32xf32>) -> tensor<128x256xf32> {
+  %0 = tensor.pack %source inner_dims_pos = [1, 0] inner_tiles = [16, 32] into %dest : tensor<128x256xf32> -> tensor<4x16x16x32xf32>
+  %1 = tensor.empty() : tensor<128x256xf32>
+  %2 = tensor.unpack %0 inner_dims_pos = [1, 0] inner_tiles = [16, 32] into %1 : tensor<4x16x16x32xf32> -> tensor<128x256xf32>
+  return %2 : tensor<128x256xf32>
+}
+
+// CHECK: func.func @pack_ck_kcck(
+// CHECK-SAME:  %[[ARG0:.*]]: tensor<128x256xf32>,
+// CHECK-SAME:  %[[ARG1:.*]]: tensor<4x16x16x32xf32>) -> tensor<128x256xf32> {
+// CHECK: %[[PACKED:.*]] = tensor.pack %[[ARG0]] inner_dims_pos = [1, 0] inner_tiles = [16, 32] into %[[ARG1]] : tensor<128x256xf32> -> tensor<4x16x16x32xf32>
+// CHECK: %[[BUFF:.*]] = tensor.empty() : tensor<128x256xf32>
+// CHECK: %[[UNPACKED:.*]] = tensor.unpack %[[PACKED]] inner_dims_pos = [1, 0] inner_tiles = [16, 32] into %[[BUFF]] : tensor<4x16x16x32xf32> -> tensor<128x256xf32>
+// CHECK: return %[[UNPACKED]] : tensor<128x256xf32>
+// CHECK: }
+
+func.func @pack_nc_to_ncnc_with_padding(%source: tensor<13x15xf32>, %dest: tensor<2x8x8x2xf32>, %padding: f32) -> tensor<13x15xf32> {
+  %0 = tensor.pack %source padding_value(%padding : f32) inner_dims_pos = [0, 1] inner_tiles = [8, 2] into %dest : tensor<13x15xf32> -> tensor<2x8x8x2xf32>
+  %1 = tensor.empty() : tensor<13x15xf32>
+  %2 = tensor.unpack %0 inner_dims_pos = [0, 1] inner_tiles = [8, 2] into %1 : tensor<2x8x8x2xf32> -> tensor<13x15xf32>
+  return %2 : tensor<13x15xf32>
+}
+
+// CHECK: func.func @pack_nc_to_ncnc_with_padding(
+// CHECK-SAME:  %[[ARG0:.*]]: tensor<13x15xf32>,
+// CHECK-SAME:  %[[ARG1:.*]]: tensor<2x8x8x2xf32>,
+// CHECK-SAME:  %[[PADDING:.*]]: f32) -> tensor<13x15xf32> {
+// CHECK: %[[PACKED:.*]] = tensor.pack %[[ARG0]] padding_value(%[[PADDING]] : f32) inner_dims_pos = [0, 1] inner_tiles = [8, 2] into %[[ARG1]] : tensor<13x15xf32> -> tensor<2x8x8x2xf32>
+// CHECK: %[[BUFF:.*]] = tensor.empty() : tensor<13x15xf32>
+// CHECK: %[[UNPACKED:.*]] = tensor.unpack %[[PACKED]] inner_dims_pos = [0, 1] inner_tiles = [8, 2] into %[[BUFF]] : tensor<2x8x8x2xf32> -> tensor<13x15xf32>
+// CHECK: return %[[UNPACKED]] : tensor<13x15xf32>
+// CHECK: }

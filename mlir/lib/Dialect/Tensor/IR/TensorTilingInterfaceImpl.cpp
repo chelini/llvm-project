@@ -68,6 +68,62 @@ struct PadOpTiling : public TilingInterface::ExternalModel<PadOpTiling, PadOp> {
   }
 };
 
+/// Utility function to build the iteration domain for `packOp` or `unPackOp`.
+template <typename OpTy>
+static SmallVector<Range> getIterationDomainImpl(OpTy op, OpBuilder &builder) {
+  static_assert(llvm::is_one_of<OpTy, PackOp, UnPackOp>::value,
+                "applies to only pack or unpack operations");
+  OpBuilder::InsertionGuard g(builder);
+  Location loc = op.getLoc();
+  int64_t rank = (std::is_same<OpTy, PackOp>::value) ? op.getSourceRank()
+                                                     : op.getDestRank();
+  SmallVector<Range> loopBounds(rank);
+  Value zero = builder.create<arith::ConstantIndexOp>(loc, 0);
+  Value one = builder.create<arith::ConstantIndexOp>(loc, 1);
+  ReifiedRankedShapedTypeDims resultShape;
+  (void)op.reifyResultShapes(builder, resultShape);
+  for (auto dim : llvm::seq<int64_t>(0, rank)) {
+    loopBounds[dim].offset = zero;
+    loopBounds[dim].stride = one;
+    loopBounds[dim].size = resultShape[0][dim];
+  }
+  return loopBounds;
+}
+
+struct PackOpTiling
+    : public TilingInterface::ExternalModel<PackOpTiling, PackOp> {
+
+  SmallVector<utils::IteratorType> getLoopIteratorTypes(Operation *op) const {
+    auto packOp = cast<PackOp>(op);
+    // Here we consider only the tiled loops, the point loops are
+    // materialized when building the body of the operation.
+    SmallVector<utils::IteratorType> iteratorTypes(
+        packOp.getSourceRank(), utils::IteratorType::parallel);
+    return iteratorTypes;
+  }
+
+  SmallVector<Range> getIterationDomain(Operation *op,
+                                        OpBuilder &builder) const {
+    return getIterationDomainImpl(cast<PackOp>(op), builder);
+  }
+};
+
+struct UnPackOpTiling
+    : public TilingInterface::ExternalModel<UnPackOpTiling, UnPackOp> {
+
+  SmallVector<utils::IteratorType> getLoopIteratorTypes(Operation *op) const {
+    auto unPackOp = cast<UnPackOp>(op);
+    SmallVector<utils::IteratorType> iteratorTypes(
+        unPackOp.getDestRank(), utils::IteratorType::parallel);
+    return iteratorTypes;
+  }
+
+  SmallVector<Range> getIterationDomain(Operation *op,
+                                        OpBuilder &builder) const {
+    return getIterationDomainImpl(cast<UnPackOp>(op), builder);
+  }
+};
+
 } // namespace
 
 Operation *tensor::bubbleUpPadSlice(OpBuilder &b, tensor::PadOp padOp,
@@ -282,5 +338,7 @@ void mlir::tensor::registerTilingInterfaceExternalModels(
     DialectRegistry &registry) {
   registry.addExtension(+[](MLIRContext *ctx, TensorDialect *dialect) {
     tensor::PadOp::attachInterface<PadOpTiling>(*ctx);
+    tensor::PackOp::attachInterface<PackOpTiling>(*ctx);
+    tensor::UnPackOp::attachInterface<UnPackOpTiling>(*ctx);
   });
 }

@@ -1664,6 +1664,84 @@ def Tensor_SplatOp : Tensor_Op<"splat", [
 }
 
 //===----------------------------------------------------------------------===//
+// PackOp
+//===----------------------------------------------------------------------===//
+
+class Tensor_RelayoutOp<string mnemonic, list<Trait> traits = []> :
+      Tensor_Op<mnemonic, !listconcat(traits, [
+        DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>,
+        DestinationStyleOpInterface,
+        Pure,
+        DeclareOpInterfaceMethods<ReifyRankedShapedTypeOpInterface>,
+        TypesMatchWith<"result type matches type of dest",
+                   "dest", "result",
+                   "$_self">])> {
+
+  code commonExtraClassDeclaration = [{
+    std::pair<int64_t, int64_t> getDpsInitsPositionRange() {
+      return {1, 2}; // `dest` operand
+    }
+  }];
+}
+
+def Tensor_PackOp : Tensor_RelayoutOp<"pack", [
+    AttrSizedOperandSegments]> { 
+  let summary = "tensor pack operation";
+  let arguments = (ins AnyRankedTensor:$source,
+                       AnyRankedTensor:$dest,
+                       Optional<AnyType>:$padding_value,
+                       DefaultValuedOptionalAttr<I64ArrayAttr, "{}">:$outer_dims_perm,
+                       I64ArrayAttr:$inner_dims_pos,
+                       Variadic<Index>:$inner_tiles,
+                       I64ArrayAttr:$static_inner_tiles);
+  let results = (outs AnyRankedTensor:$result);
+  let assemblyFormat = [{
+    $source 
+    (`padding_value` `(` $padding_value^ `:` type($padding_value) `)`)?
+    (`outer_dims_perm` `=` $outer_dims_perm^)?  
+    `inner_dims_pos` `=` $inner_dims_pos
+    `inner_tiles` `=`
+    custom<DynamicIndexList>($inner_tiles, $static_inner_tiles,
+                             "ShapedType::kDynamicSize")
+    `into` $dest attr-dict `:` type($source) `->` type($dest)
+  }];
+
+  let extraClassDeclaration = commonExtraClassDeclaration # [{
+    int64_t getSourceRank() { return getSource().getType().getRank(); };
+    int64_t getDestRank() { return getDest().getType().getRank(); };
+  }]; 
+}
+
+//===----------------------------------------------------------------------===//
+// UnPackOp
+//===----------------------------------------------------------------------===//
+
+def Tensor_UnPackOp : Tensor_RelayoutOp<"unpack"> {
+  let summary = "tensor unapack operation";
+  let arguments = (ins AnyRankedTensor:$source,
+                       AnyRankedTensor:$dest,
+                       DefaultValuedOptionalAttr<I64ArrayAttr, "{}">:$outer_dims_perm,
+                       I64ArrayAttr:$inner_dims_pos,
+                       Variadic<Index>:$inner_tiles,
+                       I64ArrayAttr:$static_inner_tiles);
+  let results = (outs AnyRankedTensor:$result);
+  let assemblyFormat = [{
+    $source
+    (`outer_dims_perm` `=` $outer_dims_perm^)?
+    `inner_dims_pos` `=` $inner_dims_pos
+    `inner_tiles` `=`
+    custom<DynamicIndexList>($inner_tiles, $static_inner_tiles,
+                             "ShapedType::kDynamicSize")
+    `into` $dest attr-dict `:` type($source) `->` type($dest)
+  }];
+
+  let extraClassDeclaration = commonExtraClassDeclaration # [{
+    int64_t getSourceRank() { return getSource().getType().getRank(); };
+    int64_t getDestRank() { return getDest().getType().getRank(); };
+  }];
+}
+
+//===----------------------------------------------------------------------===//
 // YieldOp
 //===----------------------------------------------------------------------===//
 
