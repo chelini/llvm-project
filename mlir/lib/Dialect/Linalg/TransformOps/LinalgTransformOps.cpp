@@ -30,16 +30,6 @@ using namespace mlir::transform;
 
 #define DEBUG_TYPE "linalg-transforms"
 
-/// Extracts a vector of unsigned from an array attribute. Asserts if the
-/// attribute contains values other than intergers. May truncate.
-static SmallVector<unsigned> extractUIntArray(ArrayAttr attr) {
-  SmallVector<unsigned> result;
-  result.reserve(attr.size());
-  for (APInt value : attr.getAsValueRange<IntegerAttr>())
-    result.push_back(value.getZExtValue());
-  return result;
-}
-
 namespace {
 /// A simple pattern rewriter that implements no special logic.
 class SimpleRewriter : public PatternRewriter {
@@ -194,12 +184,11 @@ static ParseResult parseTileLikeOp(OpAsmParser &parser, OperationState &result,
 DiagnosedSilenceableFailure
 transform::FuseOp::apply(mlir::transform::TransformResults &transformResults,
                          mlir::transform::TransformState &state) {
-  SmallVector<int64_t> tileSizes = extractFromI64ArrayAttr(getTileSizes());
-  SmallVector<int64_t> tileInterchange =
-      extractFromI64ArrayAttr(getTileInterchange());
+  ArrayRef<int64_t> tileSizes = getTileSizes();
+  ArrayRef<int64_t> tileInterchange = getTileInterchange();
 
   scf::SCFTilingOptions tilingOptions;
-  tilingOptions.interchangeVector = tileInterchange;
+  tilingOptions.interchangeVector = llvm::to_vector(tileInterchange);
   tilingOptions = tilingOptions.setTileSizes(tileSizes);
   scf::SCFTileAndFuseOptions tileAndFuseOptions;
   tileAndFuseOptions.tilingOptions = tilingOptions;
@@ -229,8 +218,7 @@ void transform::FuseOp::print(OpAsmPrinter &p) {
 }
 
 LogicalResult transform::FuseOp::verify() {
-  SmallVector<int64_t> permutation =
-      extractFromI64ArrayAttr(getTileInterchange());
+  ArrayRef<int64_t> permutation = getTileInterchange();
   auto sequence = llvm::to_vector(llvm::seq<int64_t>(0, permutation.size()));
   if (!std::is_permutation(sequence.begin(), sequence.end(),
                            permutation.begin(), permutation.end())) {
@@ -593,16 +581,18 @@ DiagnosedSilenceableFailure
 transform::InterchangeOp::applyToOne(linalg::GenericOp target,
                                      SmallVectorImpl<Operation *> &results,
                                      transform::TransformState &state) {
-  SmallVector<unsigned> interchangeVector =
-      extractUIntArray(getIteratorInterchange());
+  ArrayRef<int64_t> interchangeVector = getIteratorInterchange();
   // Exit early if no transformation is needed.
   if (interchangeVector.empty()) {
     results.push_back(target);
     return DiagnosedSilenceableFailure(success());
   }
   SimpleRewriter rewriter(target->getContext());
+  SmallVector<unsigned> interchangeVectorUInt;
+  llvm::transform(interchangeVector, std::back_inserter(interchangeVectorUInt),
+                  [](int64_t value) { return static_cast<unsigned>(value); });
   FailureOr<GenericOp> res =
-      interchangeGenericOp(rewriter, target, interchangeVector);
+      interchangeGenericOp(rewriter, target, interchangeVectorUInt);
   if (failed(res))
     return DiagnosedSilenceableFailure::definiteFailure();
   results.push_back(res->getOperation());
@@ -610,9 +600,8 @@ transform::InterchangeOp::applyToOne(linalg::GenericOp target,
 }
 
 LogicalResult transform::InterchangeOp::verify() {
-  SmallVector<unsigned> permutation =
-      extractUIntArray(getIteratorInterchange());
-  auto sequence = llvm::to_vector(llvm::seq<unsigned>(0, permutation.size()));
+  ArrayRef<int64_t> permutation = getIteratorInterchange();
+  auto sequence = llvm::to_vector(llvm::seq<int64_t>(0, permutation.size()));
   if (!std::is_permutation(sequence.begin(), sequence.end(),
                            permutation.begin(), permutation.end())) {
     return emitOpError()
@@ -745,7 +734,7 @@ transform::PadOp::applyToOne(linalg::LinalgOp target,
                              transform::TransformState &state) {
   // Convert the integer packing flags to booleans.
   SmallVector<bool> packPaddings;
-  for (int64_t packPadding : extractFromI64ArrayAttr(getPackPaddings()))
+  for (int64_t packPadding : getPackPaddings())
     packPaddings.push_back(static_cast<bool>(packPadding));
 
   // Convert the padding values to attributes.
@@ -788,10 +777,9 @@ transform::PadOp::applyToOne(linalg::LinalgOp target,
 
   LinalgPaddingOptions paddingOptions;
   paddingOptions.setPaddingValues(paddingValues);
-  paddingOptions.setPaddingDimensions(
-      extractFromI64ArrayAttr(getPaddingDimensions()));
+  paddingOptions.setPaddingDimensions(getPaddingDimensions());
   paddingOptions.setPackPaddings(packPaddings);
-  paddingOptions.setHoistPaddings(extractFromI64ArrayAttr(getHoistPaddings()));
+  paddingOptions.setHoistPaddings(getHoistPaddings());
   paddingOptions.setTransposePaddings(transposePaddings);
 
   FailureOr<LinalgOp> result =
@@ -806,8 +794,7 @@ transform::PadOp::applyToOne(linalg::LinalgOp target,
 }
 
 LogicalResult transform::PadOp::verify() {
-  SmallVector<int64_t> packPaddings =
-      extractFromI64ArrayAttr(getPackPaddings());
+  ArrayRef<int64_t> packPaddings = getPackPaddings();
   if (any_of(packPaddings, [](int64_t packPadding) {
         return packPadding != 0 && packPadding != 1;
       })) {
@@ -816,8 +803,7 @@ LogicalResult transform::PadOp::verify() {
            << getPackPaddings();
   }
 
-  SmallVector<int64_t> paddingDimensions =
-      extractFromI64ArrayAttr(getPaddingDimensions());
+  ArrayRef<int64_t> paddingDimensions = getPaddingDimensions();
   if (any_of(paddingDimensions,
              [](int64_t paddingDimension) { return paddingDimension < 0; })) {
     return emitOpError() << "expects padding_dimensions to contain positive "
@@ -825,8 +811,7 @@ LogicalResult transform::PadOp::verify() {
                          << getPaddingDimensions();
   }
 
-  SmallVector<int64_t> hoistPaddings =
-      extractFromI64ArrayAttr(getHoistPaddings());
+  ArrayRef<int64_t> hoistPaddings = getHoistPaddings();
   if (any_of(hoistPaddings,
              [](int64_t hoistPadding) { return hoistPadding < 0; })) {
     return emitOpError()
@@ -858,8 +843,8 @@ transform::PromoteOp::applyToOne(linalg::LinalgOp target,
                                  transform::TransformState &state) {
   LinalgPromotionOptions promotionOptions;
   if (!getOperandsToPromote().empty())
-    promotionOptions = promotionOptions.setOperandsToPromote(
-        extractFromI64ArrayAttr(getOperandsToPromote()));
+    promotionOptions =
+        promotionOptions.setOperandsToPromote(getOperandsToPromote());
   if (getUseFullTilesByDefault())
     promotionOptions = promotionOptions.setUseFullTileBuffersByDefault(
         getUseFullTilesByDefault());
@@ -1137,7 +1122,7 @@ DiagnosedSilenceableFailure transform::TileReductionUsingScfOp::applyToOne(
     transform::TransformState &state) {
   SimpleRewriter rewriter(getContext());
   rewriter.setInsertionPoint(target);
-  SmallVector<int64_t> tileSizes = extractFromI64ArrayAttr(getTileSizes());
+  ArrayRef<int64_t> tileSizes = getTileSizes();
   SmallVector<OpFoldResult> sizes;
   for (int64_t size : tileSizes) {
     sizes.push_back(rewriter.getIndexAttr(size));
@@ -1165,7 +1150,7 @@ transform::TileReductionUsingForeachThreadOp::applyToOne(
     transform::TransformState &state) {
   SimpleRewriter rewriter(getContext());
   rewriter.setInsertionPoint(target);
-  SmallVector<int64_t> numThreads = extractFromI64ArrayAttr(getNumThreads());
+  ArrayRef<int64_t> numThreads = getNumThreads();
   SmallVector<OpFoldResult> numThreadResults;
   for (int64_t num : numThreads) {
     numThreadResults.push_back(rewriter.getIndexAttr(num));
