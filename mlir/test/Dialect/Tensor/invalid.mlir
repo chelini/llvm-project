@@ -641,3 +641,19 @@ func.func @unpack_mismatch_inner_tile_size_and_output_shape(
   %0 = tensor.unpack %input inner_dims_pos = [0, 1] inner_tiles = [8, 4] into %output : tensor<?x?x8x8xf32> -> tensor<?x?xf32>
   return %0 : tensor<?x?xf32>
 }
+
+// -----
+
+func.func @pack_invalid_inner_pos(%input: tensor<256x128xf32>, %output: tensor<8x8x32x16xf32>) -> tensor<8x8x32x16xf32> {
+  // expected-error@+1 {{'tensor.pack' op attribute 'inner_dims_pos' failed to satisfy constraint: i64 dense array attribute whose value is non-negative}}
+  %0 = tensor.pack %input inner_dims_pos = [-1, 0] inner_tiles = [32, 16] into %output : tensor<256x128xf32> -> tensor<8x8x32x16xf32>
+  return %0 : tensor<8x8x32x16xf32>
+}
+
+// -----
+
+func.func @pack_invalid_inner_pos(%input: tensor<256x128xf32>, %output: tensor<8x8x32x16xf32>) -> tensor<8x8x32x16xf32> {
+  // expected-error@+1 {{'tensor.pack' op attribute 'outer_dims_perm' failed to satisfy constraint: i64 dense array attribute whose value is non-negative}}
+  %0 = tensor.pack %input outer_dims_perm = [-1, 0] inner_dims_pos = [0, 1] inner_tiles = [32, 16] into %output : tensor<256x128xf32> -> tensor<8x8x32x16xf32>
+  return %0 : tensor<8x8x32x16xf32>
+}

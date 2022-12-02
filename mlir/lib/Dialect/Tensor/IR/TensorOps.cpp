@@ -3122,7 +3122,7 @@ static bool isInvalidPackingPosSpecification(ArrayRef<int64_t> dimsPos,
   if (dimsPosSize != uniqued.size())
     return true;
   return llvm::any_of(dimsPos, [rank](int64_t dimPos) {
-    return dimPos < 0 || dimPos >= static_cast<int64_t>(rank);
+    return dimPos >= static_cast<int64_t>(rank);
   });
 }
 

@@ -1744,12 +1744,14 @@ def Tensor_PackOp : Tensor_RelayoutOp<"pack", [
 
   }];
   let arguments = (ins AnyRankedTensor:$source,
-                       AnyRankedTensor:$dest,
-                       Optional<AnyType>:$padding_value,
-                       DefaultValuedOptionalAttr<DenseI64ArrayAttr, "{}">:$outer_dims_perm,
-                       DenseI64ArrayAttr:$inner_dims_pos,
-                       Variadic<Index>:$inner_tiles,
-                       DenseI64ArrayAttr:$static_inner_tiles);
+    AnyRankedTensor:$dest,
+    Optional<AnyType>:$padding_value,
+    ConfinedAttr<DefaultValuedOptionalAttr<DenseI64ArrayAttr, "{}">,
+                 [DenseArrayNonNegative<DenseI64ArrayAttr>]>:$outer_dims_perm,
+    ConfinedAttr<DenseI64ArrayAttr,
+                 [DenseArrayNonNegative<DenseI64ArrayAttr>]>:$inner_dims_pos, 
+    Variadic<Index>:$inner_tiles,
+    DenseI64ArrayAttr:$static_inner_tiles);
   let results = (outs AnyRankedTensor:$result);
   let assemblyFormat = [{
     $source
@@ -1808,11 +1810,13 @@ def Tensor_UnPackOp : Tensor_RelayoutOp<"unpack"> {
     ```
   }];
   let arguments = (ins AnyRankedTensor:$source,
-                       AnyRankedTensor:$dest,
-                       DefaultValuedOptionalAttr<DenseI64ArrayAttr, "{}">:$outer_dims_perm,
-                       DenseI64ArrayAttr:$inner_dims_pos,
-                       Variadic<Index>:$inner_tiles,
-                       DenseI64ArrayAttr:$static_inner_tiles);
+    AnyRankedTensor:$dest,
+    ConfinedAttr<DefaultValuedOptionalAttr<DenseI64ArrayAttr, "{}">,
+                 [DenseArrayNonNegative<DenseI64ArrayAttr>]>:$outer_dims_perm,
+    ConfinedAttr<DenseI64ArrayAttr,
+                 [DenseArrayNonNegative<DenseI64ArrayAttr>]>:$inner_dims_pos,
+    Variadic<Index>:$inner_tiles,
+    DenseI64ArrayAttr:$static_inner_tiles);
   let results = (outs AnyRankedTensor:$result);
   let assemblyFormat = [{
     $source
