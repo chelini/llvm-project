@@ -61,10 +61,14 @@ namespace {
 ///    inner_dims_pos = [0]
 ///    inner_tiles = [8]
 ///    into %init : tensor<?xf32> -> tensor<?x8xf32>
+template <typename OpTy>
 static std::tuple<Value, AffineMap>
-getOrCreatePackedViewOfOperand(OpBuilder &b, Location loc,
-                               tensor::PackOp packOp, GenericOp genericOp,
-                               OpOperand *opOperand) {
+getOrCreatePackedViewOfOperand(OpBuilder &b, Location loc, OpTy packOp,
+                               GenericOp genericOp, OpOperand *opOperand) {
+  assert(0);
+  llvm::errs() << __func__ << "\n";
+  static_assert(llvm::is_one_of<OpTy, tensor::PackOp, tensor::UnPackOp>::value,
+                "applies to only pack or unpack operations");
   int numOrigLoops = genericOp.getNumLoops();
   int64_t numInnerLoops = packOp.getInnerDimsPos().size();
   int64_t numLoops = numOrigLoops + numInnerLoops;
@@ -78,11 +82,10 @@ getOrCreatePackedViewOfOperand(OpBuilder &b, Location loc,
 
   llvm::SetVector<int64_t> innerDimsPosSet(packOp.getInnerDimsPos().begin(),
                                            packOp.getInnerDimsPos().end());
-  DenseMap<int64_t, int64_t>
-      iterMapToDim; // Mapping from AffinDimExpr of indexing maps to the operand
-                    // shape dimension.
+  // Mapping from AffinDimExpr of indexing maps to the operand shape dimension.
+  DenseMap<int64_t, int64_t> iterMapToDim;
   for (auto [index, expr] : llvm::enumerate(origIndexingMap.getResults())) {
-    int64_t dimPos = expr.cast<AffineDimExpr>().getPosition();
+    int64_t dimPos = expr.template dyn_cast<AffineDimExpr>().getPosition();
     if (!innerDimsPosSet.contains(dimPos))
       continue;
     iterMapToDim[dimPos] = index;
@@ -114,12 +117,14 @@ getOrCreatePackedViewOfOperand(OpBuilder &b, Location loc,
   if (innerDimsPos.empty() && outerDimsPerm.empty())
     return std::make_tuple(opOperand->get(), indexingMap);
 
-  auto empty = tensor::PackOp::createDestinationTensor(
-      b, loc, opOperand->get(), innerTileSizes, innerDimsPos, outerDimsPerm);
-  auto packedOperand = b.create<tensor::PackOp>(
-      loc, opOperand->get(), empty, innerDimsPos, innerTileSizes,
-      packOp.getPaddingValue(), outerDimsPerm);
-  return std::make_tuple(packedOperand, indexingMap);
+  llvm::errs() << "here\n";
+
+  // auto empty = tensor::PackOp::createDestinationTensor(
+  //     b, loc, opOperand->get(), innerTileSizes, innerDimsPos, outerDimsPerm);
+  // auto packedOperand = b.create<tensor::PackOp>(
+  //     loc, opOperand->get(), empty, innerDimsPos, innerTileSizes,
+  //     packOp.getPaddingValue(), outerDimsPerm);
+  return std::make_tuple(nullptr, indexingMap);
 }
 
 /// Bubbles up tensor.pack op through elementwise generic op. This
@@ -241,10 +246,186 @@ public:
     return success();
   }
 };
+
+static std::tuple<Value, AffineMap>
+getOrCreatePackedViewOfOperandTest(OpBuilder &builder, Location loc,
+                                   tensor::UnPackOp unpackOp,
+                                   GenericOp genericOp, OpOperand *opOperand) {
+  int numOrigLoops = genericOp.getNumLoops();
+  int64_t numInnerLoops = unpackOp.getInnerDimsPos().size();
+  int64_t numLoops = numOrigLoops + numInnerLoops;
+  AffineMap origIndexingMap = genericOp.getMatchingIndexingMap(opOperand);
+  SmallVector<AffineExpr> exprs(origIndexingMap.getResults());
+
+  if (genericOp.isScalar(opOperand))
+    return std::make_tuple(
+        opOperand->get(),
+        AffineMap::get(numLoops, 0, exprs, unpackOp.getContext()));
+
+  llvm::SetVector<int64_t> innerDimsPosSet(unpackOp.getInnerDimsPos().begin(),
+                                           unpackOp.getInnerDimsPos().end());
+  DenseMap<int64_t, int64_t> iterMapToDim;
+  for (auto [index, expr] : llvm::enumerate(origIndexingMap.getResults())) {
+    int64_t dimPos = expr.cast<AffineDimExpr>().getPosition();
+    if (!innerDimsPosSet.contains(dimPos))
+      continue;
+    iterMapToDim[dimPos] = index;
+  }
+
+  // Construct the information of packing data dimensions and new indexing maps
+  // for the operand.
+  SmallVector<int64_t> innerDimsPos;
+  SmallVector<OpFoldResult> innerTileSizes;
+  for (auto [index, value] : llvm::enumerate(
+           llvm::zip(unpackOp.getInnerDimsPos(), unpackOp.getMixedTiles()))) {
+    int64_t dimPos = std::get<0>(value);
+    if (!iterMapToDim.count(dimPos))
+      continue;
+    innerDimsPos.push_back(iterMapToDim[dimPos]);
+    innerTileSizes.push_back(std::get<1>(value));
+    exprs.push_back(builder.getAffineDimExpr(numOrigLoops + index));
+  }
+  auto indexingMap = AffineMap::get(numLoops, 0, exprs, unpackOp.getContext());
+
+  SmallVector<int64_t> outerDimsPerm;
+  for (auto outDim : unpackOp.getOuterDimsPerm()) {
+    if (!iterMapToDim.count(outDim))
+      continue;
+    outerDimsPerm.push_back(iterMapToDim[outDim]);
+  }
+
+  // The operand does not have dimensions that relates to pack op.
+  if (innerDimsPos.empty() && outerDimsPerm.empty())
+    return std::make_tuple(opOperand->get(), indexingMap);
+
+  llvm::errs() << "=================================\n";
+  llvm::errs() << "=================================\n";
+
+  tensor::UnPackOp sourceDefOperand =
+      opOperand->get().getDefiningOp<tensor::UnPackOp>();
+  if (sourceDefOperand) {
+    llvm::errs() << "Operand comes from an unpack\n";
+    return std::make_tuple(sourceDefOperand.getSource(), indexingMap);
+  }
+  auto empty = tensor::PackOp::createDestinationTensor(
+      builder, loc, opOperand->get(), innerTileSizes, innerDimsPos,
+      outerDimsPerm);
+  auto packedOperand =
+      builder.create<tensor::PackOp>(loc, opOperand->get(), empty, innerDimsPos,
+                                     innerTileSizes, llvm::None, outerDimsPerm);
+  return std::make_tuple(packedOperand, indexingMap);
+}
+
+FailureOr<GenericOp>
+pushDownUnPackOpThroughElemGenericOp(RewriterBase &rewriter,
+                                     GenericOp genericOp) {
+  if (!isElementwise(genericOp))
+    return failure();
+
+  if (genericOp.getNumResults() != 1)
+    return failure();
+
+  // TODO: is this checked in `isElementwise`?
+  OpOperand *opOperand = genericOp.getDpsInitOperand(0);
+  if (!genericOp.getMatchingIndexingMap(opOperand).isIdentity())
+    return failure();
+
+  // TODO:
+  size_t numberOfUnPackedOperands = 0;
+  tensor::UnPackOp unpackOp;
+  for (OpOperand &operand : genericOp->getOpOperands()) {
+    unpackOp = operand.get().getDefiningOp<tensor::UnPackOp>();
+    if (unpackOp)
+      numberOfUnPackedOperands++;
+  }
+  if (numberOfUnPackedOperands != 1)
+    return failure();
+
+  llvm::errs() << "=================================\n";
+  llvm::errs() << genericOp << "\n";
+  llvm::errs() << "=================================\n";
+
+  Location loc = genericOp.getLoc();
+  SmallVector<Value> packedInputOperands;
+  SmallVector<AffineMap> packedIndexingMaps;
+  for (OpOperand *operand : genericOp.getDpsInputOperands()) {
+    auto [packedOperand, packedIndexingMap] =
+        getOrCreatePackedViewOfOperandTest(rewriter, loc, unpackOp, genericOp,
+                                           operand);
+    packedInputOperands.push_back(packedOperand);
+    packedIndexingMaps.push_back(packedIndexingMap);
+  }
+
+  Value packedOutputOperand;
+  auto [packedOperand, packedIndexingMap] = getOrCreatePackedViewOfOperandTest(
+      rewriter, loc, unpackOp, genericOp, genericOp.getDpsInitOperand(0));
+  packedOutputOperand = packedOperand;
+  packedIndexingMaps.push_back(packedIndexingMap);
+
+  llvm::errs() << "=================================\n";
+  llvm::errs() << packedOutputOperand << "\n";
+  for (Value packedInput : packedInputOperands)
+    llvm::errs() << packedInput << "\n";
+  llvm::errs() << "=================================\n";
+
+  int64_t numInnerLoops = unpackOp.getInnerDimsPos().size();
+  SmallVector<utils::IteratorType> iterTypes =
+      genericOp.getIteratorTypesArray();
+  iterTypes.append(numInnerLoops, utils::IteratorType::parallel);
+
+  auto newGenericOp = rewriter.create<GenericOp>(
+      loc, packedOutputOperand.getType(), packedInputOperands,
+      packedOutputOperand, packedIndexingMaps, iterTypes, /*bodyBuild=*/nullptr,
+      linalg::getPrunedAttributeList(genericOp));
+  rewriter.inlineRegionBefore(genericOp.getRegion(), newGenericOp.getRegion(),
+                              newGenericOp.getRegion().begin());
+
+  // re-create the unpack.
+  Value newGenericOpResult = newGenericOp.getDpsInitOperand(0)->get();
+  tensor::PackOp defOp = newGenericOpResult.getDefiningOp<tensor::PackOp>();
+  // The original output was not unpacked.
+  if (defOp) {
+    assert(0 && "not handle");
+  }
+  // The original output was unpacked.
+  else {
+    tensor::UnPackOp newUnpackOp = rewriter.create<tensor::UnPackOp>(
+        loc, unpackOp.getDest().getType(),
+        newGenericOp.getTiedOpResult(newGenericOp.getDpsInitOperand(0)),
+        unpackOp.getDest(), unpackOp.getOuterDimsPerm(),
+        unpackOp.getInnerDimsPos(), unpackOp.getInnerTiles(),
+        unpackOp.getStaticTiles());
+    newGenericOpResult = newUnpackOp.getResult();
+  }
+
+  // auto m = newGenericOp->getParentOfType<ModuleOp>();
+  // m.dump();
+
+  rewriter.replaceOp(genericOp, newGenericOpResult);
+  return genericOp;
+}
+
+// Wrapper pattern that applies pushDownUnPackOpThroughElemGenericOp method.
+struct PushDownUnPackOpThroughElemGenericOpPattern
+    : public OpRewritePattern<GenericOp> {
+  using OpRewritePattern<GenericOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(GenericOp genericOp,
+                                PatternRewriter &rewriter) const override {
+    auto newGenericOp =
+        pushDownUnPackOpThroughElemGenericOp(rewriter, genericOp);
+    if (failed(newGenericOp))
+      return failure();
+    // rewriter.replaceOp(genericOp, newGenericOp.value().getResults());
+    return success();
+  }
+};
+
 } // namespace
 
 void mlir::linalg::populateDataLayoutPropagationPatterns(
     RewritePatternSet &patterns) {
-  patterns.insert<BubbleUpPackOpThroughElemGenericOpPattern>(
+  patterns.insert<BubbleUpPackOpThroughElemGenericOpPattern,
+                  PushDownUnPackOpThroughElemGenericOpPattern>(
       patterns.getContext());
 }
