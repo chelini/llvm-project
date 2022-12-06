@@ -228,3 +228,47 @@ func.func @transpose_pack(%arg0: tensor<100x128x200x256xi32>, %arg1: tensor<100x
 // CHECK: func.func @transpose_pack
 // CHECK:   linalg.generic
 // CHECK:   tensor.pack
+
+// -----
+
+#map = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
+func.func @sink_unpack_elemwise(%arg0: tensor<12x2x56x56x32xf32>) -> tensor<12x56x56x64xf32> {
+  %0 = tensor.empty() : tensor<12x56x56x64xf32>
+  %1 = tensor.unpack %arg0 outer_dims_perm = [0, 3, 1, 2] inner_dims_pos = [3] inner_tiles = [32] into %0 : tensor<12x2x56x56x32xf32> -> tensor<12x56x56x64xf32>
+  %2 = linalg.generic {indexing_maps = [#map], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} outs(%1 : tensor<12x56x56x64xf32>) {
+    ^bb0(%out: f32):
+      %3 = arith.addf %out, %out : f32
+      linalg.yield %3 : f32
+  } -> tensor<12x56x56x64xf32>
+  return %2 : tensor<12x56x56x64xf32>
+}
+
+// -----
+
+#map = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
+#map1 = affine_map<(d0, d1, d2, d3) -> (d2, d3)>
+func.func @sink_unpack_elemwise(%arg0: tensor<1x2x56x56x32xf32>, %arg1: tensor<56x64xf32>, %arg2: tensor<1x56x56x64xf32>) -> tensor<1x56x56x64xf32> {
+  %0 = tensor.empty() : tensor<1x56x56x64xf32>
+  %1 = tensor.unpack %arg0 outer_dims_perm = [0, 3, 1, 2] inner_dims_pos = [3] inner_tiles = [32] into %0 : tensor<1x2x56x56x32xf32> -> tensor<1x56x56x64xf32>
+  %2 = linalg.generic {indexing_maps = [#map, #map1, #map], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%1, %arg1 : tensor<1x56x56x64xf32>, tensor<56x64xf32>) outs(%arg2 : tensor<1x56x56x64xf32>) {
+    ^bb0(%in : f32, %in_0 : f32, %out : f32):
+      %3 = arith.addf %in, %in_0 : f32
+      linalg.yield %3 : f32
+  } -> tensor<1x56x56x64xf32>
+  return %2 : tensor<1x56x56x64xf32>
+}
+
+// -----
+
+#map = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
+#map1 = affine_map<(d0, d1, d2, d3) -> (d3)>
+func.func @sink_unpack_elemwise(%arg0: tensor<1x56x56x64xf32>) -> tensor<1x56x56x64xf32> {
+  %0 = tensor.empty() : tensor<1x56x56x64xf32>
+  %1 = tensor.unpack %arg0 outer_dims_perm = [0, 3, 1, 2] inner_dims_pos = [3] inner_tiles = [32] into %0 : tensor<1x2x56x56x32xf32> -> tensor<1x56x56x64xf32>
+  %2 = linalg.generic {indexing_maps = [#map, #map1, #map], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%1, %arg1 : tensor<1x56x56x64xf32>, tensor<64xf32>) outs(%arg2 : tensor<1x56x56x64xf32>) {
+    ^bb0(%in : f32, %in_0 : f32, %out : f32):
+      %3 = arith.addf %in, %in_0 : f32
+      linalg.yield %3 : f32
+  } -> tensor<1x56x56x64xf32>
+  return %2 : tensor<1x56x56x64xf32>
+}
