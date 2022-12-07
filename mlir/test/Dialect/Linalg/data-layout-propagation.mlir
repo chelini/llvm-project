@@ -96,16 +96,17 @@ func.func @elem_pack_transpose_outer_dims(%arg0: tensor<128x256xi32>, %dest: ten
     into %dest : tensor<128x256xi32> -> tensor<16x4x32x16xi32>
   return %pack : tensor<16x4x32x16xi32>
 }
-// CHECK-DAG:  #[[MAP:.+]] = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
+// CHECK-DAG:  #[[MAP0:.+]] = affine_map<(d0, d1, d2, d3) -> (d1, d0, d2, d3)>
+// CHECK-DAG:  #[[MAP1:.+]] = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
 // CHECK:      func.func @elem_pack_transpose_outer_dims
 // CHECK-SAME:   %[[ARG0:[a-zA-Z0-9]+]]
 // CHECK-SAME:   %[[DEST:[a-zA-Z0-9]+]]
-// CHECK:        %[[ARG0_EMPTY:.+]] = tensor.empty() : tensor<16x4x32x16xi32>
+// CHECK:        %[[ARG0_EMPTY:.+]] = tensor.empty() : tensor<4x16x32x16xi32>
 // CHECK:        %[[PACK_ARG0:.+]] = tensor.pack %[[ARG0]]
-// CHECK-SAME:     outer_dims_perm = [1, 0] inner_dims_pos = [0, 1] inner_tiles = [32, 16]
-// CHECK-SAME:     into %[[ARG0_EMPTY]]
+// CHECK-SAME:     inner_dims_pos = [0, 1] inner_tiles = [32, 16]
+// CHECK-SAME:     into %[[ARG0_EMPTY]] : tensor<128x256xi32> -> tensor<4x16x32x16xi32>
 // CHECK:        %[[ELEM:.+]] = linalg.generic
-// CHECK-SAME:     indexing_maps = [#[[MAP]], #[[MAP]]]
+// CHECK-SAME:     indexing_maps = [#[[MAP0]], #[[MAP1]]]
 // CHECK-SAME:     iterator_types = ["parallel", "parallel", "parallel", "parallel"]
 // CHECK-SAME:     ins(%[[PACK_ARG0]]
 // CHECK-SAME:     outs(%[[DEST]]
@@ -130,16 +131,17 @@ func.func @elem_pack_transpose_inner_and_outer_dims(%arg0: tensor<128x256xi32>, 
     into %dest : tensor<128x256xi32> -> tensor<16x4x16x32xi32>
   return %pack : tensor<16x4x16x32xi32>
 }
-// CHECK-DAG:  #[[MAP:.+]] = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
+// CHECK-DAG:  #[[MAP0:.+]] = affine_map<(d0, d1, d2, d3) -> (d1, d0, d2, d3)>
+// CHECK-DAG:  #[[MAP1:.+]] = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
 // CHECK:      func.func @elem_pack_transpose_inner_and_outer_dims
 // CHECK-SAME:   %[[ARG0:[a-zA-Z0-9]+]]
 // CHECK-SAME:   %[[DEST:[a-zA-Z0-9]+]]
-// CHECK:        %[[ARG0_EMPTY:.+]] = tensor.empty() : tensor<16x4x16x32xi32>
+// CHECK:        %[[ARG0_EMPTY:.+]] = tensor.empty() : tensor<4x16x16x32xi32>
 // CHECK:        %[[PACK_ARG0:.+]] = tensor.pack %[[ARG0]]
-// CHECK-SAME:     outer_dims_perm = [1, 0] inner_dims_pos = [1, 0] inner_tiles = [16, 32]
+// CHECK-SAME:     inner_dims_pos = [1, 0] inner_tiles = [16, 32]
 // CHECK-SAME:     into %[[ARG0_EMPTY]]
 // CHECK:        %[[ELEM:.+]] = linalg.generic
-// CHECK-SAME:     indexing_maps = [#[[MAP]], #[[MAP]]]
+// CHECK-SAME:     indexing_maps = [#[[MAP0]], #[[MAP1]]]
 // CHECK-SAME:     iterator_types = ["parallel", "parallel", "parallel", "parallel"]
 // CHECK-SAME:     ins(%[[PACK_ARG0]]
 // CHECK-SAME:     outs(%[[DEST]]
@@ -226,5 +228,22 @@ func.func @transpose_pack(%arg0: tensor<100x128x200x256xi32>, %arg1: tensor<100x
   return %4 : tensor<100x200x4x16x16x32xi32>
 }
 // CHECK: func.func @transpose_pack
-// CHECK:   linalg.generic
 // CHECK:   tensor.pack
+// CHECK:   linalg.generic
+
+// -----
+
+#map = affine_map<(d0, d1, d2, d3) -> (d3)>
+#map1 = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
+func.func @elem_pack_transpose_inner_and_outer_dims2(%arg0: tensor<64xf32>) -> tensor<1x2x56x57x32xf32> {
+  %0 = tensor.empty() : tensor<1x56x57x64xf32>
+  %1 = linalg.generic {indexing_maps = [#map, #map1], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%arg0 : tensor<64xf32>) outs(%0 : tensor<1x56x57x64xf32>) {
+    ^bb0(%in: f32, %out: f32):
+      linalg.yield %in : f32
+  } -> tensor<1x56x57x64xf32>
+  %5 = tensor.empty() : tensor<1x2x56x57x32xf32>
+  %2 = tensor.pack %1 outer_dims_perm = [0, 3, 1, 2] inner_dims_pos = [3] inner_tiles = [32] into %5 : tensor<1x56x57x64xf32> -> tensor<1x2x56x57x32xf32>
+  return %2 : tensor<1x2x56x57x32xf32>
+}
+// CHECK:   tensor.pack
+// CHECK:   linalg.generic

@@ -70,7 +70,7 @@ int64_t computeMaxLinearIndex(ArrayRef<int64_t> basis);
 template <typename T, unsigned N>
 void applyPermutationToVector(SmallVector<T, N> &inVec,
                               ArrayRef<int64_t> permutation) {
-  SmallVector<T, N> auxVec(inVec.size());
+  SmallVector<T, N> auxVec = inVec;
   for (const auto &en : enumerate(permutation))
     auxVec[en.index()] = inVec[en.value()];
   inVec = auxVec;

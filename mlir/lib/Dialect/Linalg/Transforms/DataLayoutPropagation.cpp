@@ -29,6 +29,63 @@ using namespace mlir::linalg;
 
 namespace {
 
+struct PackInfo {
+  int64_t getNumTiledLoopsOperand(AffineMap map) const {
+    int64_t cnt = 0;
+    for (AffineExpr expr : map.getResults()) {
+      int64_t pos = expr.cast<AffineDimExpr>().getPosition();
+      if (!packedDims.count(pos))
+        continue;
+      cnt++;
+    }
+    return cnt;
+  };
+  int64_t getNumTiledLoops() const { return packedDims.size(); };
+  // domain -> tile for tiled loops.
+  llvm::DenseMap<int64_t, OpFoldResult> packedDims;
+  // entire domain loop perm only for outer loops.
+  // if we have any permutation on the point loop it is propagated in the pack.
+  llvm::SmallVector<int64_t> loopPerm;
+
+  llvm::SmallVector<int64_t> innerDimsPos;
+};
+
+template <typename OpTy>
+PackInfo getPackingInfo(AffineMap indexingMap, OpTy packOp) {
+  PackInfo packInfo;
+  SmallVector<AffineExpr> exprs(indexingMap.getResults());
+  llvm::DenseSet<int64_t> innerDimsPosSet(packOp.getInnerDimsPos().begin(),
+                                          packOp.getInnerDimsPos().end());
+  size_t idxInTiles = 0;
+  size_t idxInDimPos = 0;
+  for (auto [index, expr] : llvm::enumerate(indexingMap.getResults())) {
+    int64_t dimPos = expr.template cast<AffineDimExpr>().getPosition();
+    // If index is in `innerDimsPosSet` the current tensor dimension is tiled.
+    // Get the position in the domain and bind it to the tile size.
+    if (!innerDimsPosSet.contains(index))
+      continue;
+    packInfo.packedDims[dimPos] = packOp.getMixedTiles()[idxInTiles++];
+  }
+  // build loop perm, assume no permutation.
+  size_t idx = 0;
+  while (idx < packInfo.getNumTiledLoops() + indexingMap.getNumDims())
+    packInfo.loopPerm.push_back(idx++);
+  assert(packInfo.loopPerm.size() ==
+         packInfo.getNumTiledLoops() + indexingMap.getNumDims());
+
+  // if we have permutation by outer dims add them.
+  idx = 0;
+  ArrayRef<int64_t> outerDimsPerm = packOp.getOuterDimsPerm();
+  for (int64_t dim : outerDimsPerm)
+    packInfo.loopPerm[idx++] = indexingMap.getDimPosition(dim);
+
+  assert(packInfo.loopPerm.size() ==
+         packInfo.getNumTiledLoops() + indexingMap.getNumDims());
+
+  packInfo.innerDimsPos = llvm::to_vector(packOp.getInnerDimsPos());
+  return packInfo;
+}
+
 /// Returns a tuple for packed operand and indexing_map with the assumptions:
 ///   1) The generic op is the producer of the pack op.
 ///   2) The generic op has only one result.
@@ -61,53 +118,82 @@ namespace {
 ///    inner_dims_pos = [0]
 ///    inner_tiles = [8]
 ///    into %init : tensor<?xf32> -> tensor<?x8xf32>
+
+SmallVector<int64_t> getInnerDimsPosForOperand(AffineMap origIndexingMap,
+                                               PackInfo &packInfo) {
+  llvm::DenseMap<int64_t, int64_t> domainToDimOperandPos;
+  for (auto [index, expr] : llvm::enumerate(origIndexingMap.getResults())) {
+    int64_t pos = expr.cast<AffineDimExpr>().getPosition();
+    domainToDimOperandPos[pos] = index;
+  }
+  SmallVector<int64_t> innerDimsPos;
+  for (int64_t dimPos : packInfo.innerDimsPos) {
+    if (!domainToDimOperandPos.count(dimPos)) continue;
+    int64_t index = domainToDimOperandPos[dimPos];
+    innerDimsPos.push_back(index);
+  }
+  return innerDimsPos;
+}
+
 static std::tuple<Value, AffineMap>
-getOrCreatePackedViewOfOperand(OpBuilder &b, Location loc,
-                               tensor::PackOp packOp, GenericOp genericOp,
-                               OpOperand *opOperand) {
+getOrCreatePackedViewOfOperand(OpBuilder &b, Location loc, PackInfo &packInfo,
+                               GenericOp genericOp, OpOperand *opOperand) {
   int numOrigLoops = genericOp.getNumLoops();
-  int64_t numInnerLoops = packOp.getInnerDimsPos().size();
-  int64_t numLoops = numOrigLoops + numInnerLoops;
   AffineMap origIndexingMap = genericOp.getMatchingIndexingMap(opOperand);
+  int origRes = origIndexingMap.getNumResults();
   SmallVector<AffineExpr> exprs(origIndexingMap.getResults());
+  MLIRContext *ctx = genericOp.getContext();
+  int64_t numLoops = numOrigLoops + packInfo.getNumTiledLoops();
 
   if (genericOp.isScalar(opOperand))
-    return std::make_tuple(
-        opOperand->get(),
-        AffineMap::get(numLoops, 0, exprs, packOp.getContext()));
+    return std::make_tuple(opOperand->get(),
+                           AffineMap::get(numLoops, 0, exprs, ctx));
 
-  llvm::SetVector<int64_t> innerDimsPosSet(packOp.getInnerDimsPos().begin(),
-                                           packOp.getInnerDimsPos().end());
-  // Mapping from AffinDimExpr of indexing maps to the operand shape dimension.
-  DenseMap<int64_t, int64_t> iterMapToDim;
+  llvm::errs() << "=================================\n";
+  llvm::errs() << "--> operand map: " << origIndexingMap << "\n";
+  llvm::errs() << "loop permutation: \n";
+  for (int64_t loopIdx : packInfo.loopPerm)
+    llvm::errs() << loopIdx << " ";
+  llvm::errs() << "\n";
+
+  // We fold the transpose into the generic no outer dims perm for the pack.
+  // This is bad for later fusion.
+  SmallVector<int64_t> outerDimsPerm = {};
+
+  SmallVector<OpFoldResult> innerTileSizes;
   for (auto [index, expr] : llvm::enumerate(origIndexingMap.getResults())) {
     int64_t dimPos = expr.cast<AffineDimExpr>().getPosition();
-    if (!innerDimsPosSet.contains(dimPos))
+    if (!packInfo.packedDims.count(dimPos))
       continue;
-    iterMapToDim[dimPos] = index;
+    innerTileSizes.push_back(packInfo.packedDims[dimPos]);
+    // point loops are simply appended. The permutation is pushed out into the
+    // pack.
+    exprs.push_back(b.getAffineDimExpr(dimPos + packInfo.getNumTiledLoops()));
   }
 
-  // Construct the information of packing data dimensions and new indexing maps
-  // for the operand.
-  SmallVector<int64_t> innerDimsPos;
-  SmallVector<OpFoldResult> innerTileSizes;
-  for (auto [index, value] : llvm::enumerate(
-           llvm::zip(packOp.getInnerDimsPos(), packOp.getMixedTiles()))) {
-    int64_t dimPos = std::get<0>(value);
-    if (!iterMapToDim.count(dimPos))
-      continue;
-    innerDimsPos.push_back(iterMapToDim[dimPos]);
-    innerTileSizes.push_back(std::get<1>(value));
-    exprs.push_back(b.getAffineDimExpr(numOrigLoops + index));
-  }
-  auto indexingMap = AffineMap::get(numLoops, 0, exprs, packOp.getContext());
+  SmallVector<int64_t> innerDimsPos =
+      getInnerDimsPosForOperand(origIndexingMap, packInfo);
 
-  SmallVector<int64_t> outerDimsPerm;
-  for (auto outDim : packOp.getOuterDimsPerm()) {
-    if (!iterMapToDim.count(outDim))
-      continue;
-    outerDimsPerm.push_back(iterMapToDim[outDim]);
-  }
+  llvm::errs() << "outer perm: \n";
+  for (int64_t outer : outerDimsPerm)
+    llvm::errs() << outer << " ";
+  llvm::errs() << "\n";
+
+  auto indexingMap = AffineMap::get(numLoops, 0, exprs, genericOp.getContext());
+  llvm::errs() << "new indexing map:" << indexingMap << "\n";
+  AffineMap permutationMap = AffineMap::getPermutationMap(
+      SmallVector<unsigned>(packInfo.loopPerm.begin(), packInfo.loopPerm.end()),
+      ctx);
+  llvm::errs() << "perm map: " << permutationMap << "\n";
+  AffineMap invPerm = inversePermutation(permutationMap);
+  llvm::errs() << "inverse map: " << invPerm << "\n";
+  indexingMap = indexingMap.compose(invPerm);
+  llvm::errs() << "new map: " << indexingMap << "\n";
+  llvm::errs() << "inner pos: \n";
+  for (int64_t inner : innerDimsPos)
+    llvm::errs() << inner << " ";
+  llvm::errs() << "\n";
+  llvm::errs() << "=================================\n";
 
   // The operand does not have dimensions that relates to pack op.
   if (innerDimsPos.empty() && outerDimsPerm.empty())
@@ -115,9 +201,9 @@ getOrCreatePackedViewOfOperand(OpBuilder &b, Location loc,
 
   auto empty = tensor::PackOp::createDestinationTensor(
       b, loc, opOperand->get(), innerTileSizes, innerDimsPos, outerDimsPerm);
-  auto packedOperand = b.create<tensor::PackOp>(
-      loc, opOperand->get(), empty, innerDimsPos, innerTileSizes,
-      packOp.getPaddingValue(), outerDimsPerm);
+  auto packedOperand =
+      b.create<tensor::PackOp>(loc, opOperand->get(), empty, innerDimsPos,
+                               innerTileSizes, llvm::None, outerDimsPerm);
   return std::make_tuple(packedOperand, indexingMap);
 }
 
@@ -192,12 +278,15 @@ bubbleUpPackOpThroughElemGenericOp(RewriterBase &rewriter,
     return rewriter.notifyMatchFailure(
         packOp, "the result of generic op does not have identity indexing_map");
 
+  auto packInfo =
+      getPackingInfo(genericOp.getMatchingIndexingMap(opOperand), packOp);
+
   Location loc = packOp.getLoc();
   SmallVector<Value> inputOperands;
   SmallVector<AffineMap> indexingMaps;
   for (OpOperand *inputOperand : genericOp.getDpsInputOperands()) {
     auto [packedOperand, packedIndexingMap] = getOrCreatePackedViewOfOperand(
-        rewriter, loc, packOp, genericOp, inputOperand);
+        rewriter, loc, packInfo, genericOp, inputOperand);
     inputOperands.push_back(packedOperand);
     indexingMaps.push_back(packedIndexingMap);
   }
@@ -213,8 +302,10 @@ bubbleUpPackOpThroughElemGenericOp(RewriterBase &rewriter,
       genericOp.getMatchingIndexingMap(opOperand).getResults());
   for (int i = 0; i < numInnerLoops; ++i)
     outExprs.push_back(rewriter.getAffineDimExpr(numLoops + i));
-  indexingMaps.push_back(
-      AffineMap::get(newNumLoops, 0, outExprs, rewriter.getContext()));
+  AffineMap outMap =
+      AffineMap::get(newNumLoops, 0, outExprs, rewriter.getContext());
+  // llvm::errs() << "output map: " << outMap << "\n";
+  indexingMaps.push_back(outMap);
 
   auto newGenericOp = rewriter.create<linalg::GenericOp>(
       loc, packOp.getDestType(), inputOperands, packOp.getDest(), indexingMaps,
