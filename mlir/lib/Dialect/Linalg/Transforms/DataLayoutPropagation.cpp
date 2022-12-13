@@ -46,12 +46,11 @@ struct PackInfo {
   Optional<Value> paddingValue;
 };
 
-static PackInfo getPackingInfoFromConsumer(
+static PackInfo getPackingInfoForOperand(
     AffineMap indexingMap, ArrayRef<OpFoldResult> innerTileSizes,
     ArrayRef<int64_t> innerDimsPos, ArrayRef<int64_t> outerDimsPerm,
     Optional<Value> paddingValue = llvm::None) {
-  LLVM_DEBUG(
-      { llvm::dbgs() << "--- Construct PackInfo From A Consumer ---\n"; });
+  LLVM_DEBUG({ llvm::dbgs() << "--- Construct PackInfo for operand ---\n"; });
   PackInfo packInfo;
   packInfo.paddingValue = paddingValue;
   int64_t origNumDims = indexingMap.getNumDims();
@@ -91,7 +90,7 @@ static PackInfo getPackingInfoFromConsumer(
 ///   1) The generic op is the producer of the pack op.
 ///   2) The generic op has only one result.
 /// If the operand is a scalar or packing dimensions are all irrelevant to the
-/// operand, the opreand and the updated indexing map will be returned.
+/// operand, the operand and the updated indexing map will be returned.
 /// Otherwise, it returns the packed operand and the updated indexing map. E.g.,
 ///
 ///   #map0 = affine_map<(d0, d1) -> (d0, d1)>
@@ -173,6 +172,52 @@ getOrCreatePackedViewOfOperand(OpBuilder &b, Location loc, PackInfo packInfo,
   return std::make_tuple(packedOperand, indexingMap);
 }
 
+static GenericOp packElementWiseOp(RewriterBase &rewriter, GenericOp genericOp,
+                                   Value dest, ArrayRef<int64_t> outerDimsPerm,
+                                   const PackInfo &packInfo) {
+  Location loc = genericOp.getLoc();
+  SmallVector<Value> inputOperands;
+  SmallVector<AffineMap> indexingMaps;
+  for (OpOperand *inputOperand : genericOp.getDpsInputOperands()) {
+    auto [packedOperand, packedIndexingMap] = getOrCreatePackedViewOfOperand(
+        rewriter, loc, packInfo, genericOp, inputOperand);
+    inputOperands.push_back(packedOperand);
+    indexingMaps.push_back(packedIndexingMap);
+  }
+
+  int64_t numLoops = genericOp.getNumLoops();
+  int64_t numInnerLoops = packInfo.getNumTiledLoops();
+  int64_t newNumLoops = numLoops + numInnerLoops;
+  SmallVector<utils::IteratorType> iterTypes =
+      genericOp.getIteratorTypesArray();
+  iterTypes.append(numInnerLoops, utils::IteratorType::parallel);
+
+  // Rebuild the indexing map for the corresponding init operand.
+  auto [packedOutOperand, packedOutIndexingMap] =
+      getOrCreatePackedViewOfOperand(rewriter, loc, packInfo, genericOp,
+                                     genericOp.getDpsInitOperand(0));
+
+  SmallVector<AffineExpr> outExprs(
+      packedOutIndexingMap.getResults().drop_back(numInnerLoops));
+  // Apply transpose to the indexing map, because we'll replace the init operand
+  // with the destination of pack op.
+  if (!outerDimsPerm.empty()) {
+    applyPermutationToVector<AffineExpr>(outExprs, outerDimsPerm);
+  }
+  for (int i = 0; i < numInnerLoops; ++i)
+    outExprs.push_back(rewriter.getAffineDimExpr(numLoops + i));
+  AffineMap outMap =
+      AffineMap::get(newNumLoops, 0, outExprs, rewriter.getContext());
+  indexingMaps.push_back(outMap);
+
+  auto newGenericOp = rewriter.create<linalg::GenericOp>(
+      loc, dest.getType(), inputOperands, dest, indexingMaps, iterTypes,
+      /*bodyBuild=*/nullptr, linalg::getPrunedAttributeList(genericOp));
+  rewriter.cloneRegionBefore(genericOp.getRegion(), newGenericOp.getRegion(),
+                             newGenericOp.getRegion().begin());
+  return newGenericOp;
+}
+
 /// Bubbles up tensor.pack op through elementwise generic op. This
 /// swap pack(generic) to generic(pack). The new generic op works on packed
 /// domain; pack ops are created for input and output operands. E.g.,
@@ -239,52 +284,62 @@ bubbleUpPackOpThroughElemGenericOp(RewriterBase &rewriter,
     return failure();
 
   OpOperand *opOperand = genericOp.getDpsInitOperand(0);
-  auto packInfo = getPackingInfoFromConsumer(
+  auto packInfo = getPackingInfoForOperand(
       genericOp.getMatchingIndexingMap(opOperand), packOp.getMixedTiles(),
       packOp.getInnerDimsPos(), packOp.getOuterDimsPerm(),
       packOp.getPaddingValue());
+  return packElementWiseOp(rewriter, genericOp, packOp.getDest(),
+                           packOp.getOuterDimsPerm(), packInfo);
+}
 
-  Location loc = packOp.getLoc();
-  SmallVector<Value> inputOperands;
-  SmallVector<AffineMap> indexingMaps;
-  for (OpOperand *inputOperand : genericOp.getDpsInputOperands()) {
-    auto [packedOperand, packedIndexingMap] = getOrCreatePackedViewOfOperand(
-        rewriter, loc, packInfo, genericOp, inputOperand);
-    inputOperands.push_back(packedOperand);
-    indexingMaps.push_back(packedIndexingMap);
+// TODO: Handle multiple unPacks.
+static FailureOr<PackInfo> getPackingInfoFromProducers(GenericOp genericOp) {
+  size_t countUnPackOps = 0;
+  PackInfo packInfo;
+  for (OpOperand &operand : genericOp->getOpOperands()) {
+    tensor::UnPackOp unpackOp = operand.get().getDefiningOp<tensor::UnPackOp>();
+    if (unpackOp) {
+      packInfo = getPackingInfoForOperand(
+          genericOp.getMatchingIndexingMap(&operand), unpackOp.getMixedTiles(),
+          unpackOp.getInnerDimsPos(), unpackOp.getOuterDimsPerm(), llvm::None);
+      countUnPackOps++;
+    }
   }
+  if (countUnPackOps == 1)
+    return packInfo;
+  return failure();
+}
 
-  int64_t numLoops = genericOp.getNumLoops();
-  int64_t numInnerLoops = packInfo.getNumTiledLoops();
-  int64_t newNumLoops = numLoops + numInnerLoops;
-  SmallVector<utils::IteratorType> iterTypes =
-      genericOp.getIteratorTypesArray();
-  iterTypes.append(numInnerLoops, utils::IteratorType::parallel);
+static FailureOr<GenericOp>
+pushDownUnPackOpThroughElemGenericOp(RewriterBase &rewriter,
+                                     GenericOp genericOp) {
+  if (!isElementwise(genericOp))
+    return failure();
+  if (genericOp.getNumResults() != 1)
+    return failure();
 
-  // Rebuild the indexing map for the corresponding init operand.
+  auto maybePackInfo = getPackingInfoFromProducers(genericOp);
+  if (failed(maybePackInfo))
+    return failure();
+  auto packInfo = maybePackInfo.value();
+
+  // Build pack and indexing map for output.
   auto [packedOutOperand, packedOutIndexingMap] =
-      getOrCreatePackedViewOfOperand(rewriter, loc, packInfo, genericOp,
-                                     opOperand);
-  SmallVector<AffineExpr> outExprs(
-      packedOutIndexingMap.getResults().drop_back(numInnerLoops));
-  // Apply transpose to the indexing map, because we'll replace the init operand
-  // with the destination of pack op.
-  auto outerDimsPerm = packOp.getOuterDimsPerm();
-  if (!outerDimsPerm.empty()) {
-    applyPermutationToVector<AffineExpr>(outExprs, outerDimsPerm);
-  }
-  for (int i = 0; i < numInnerLoops; ++i)
-    outExprs.push_back(rewriter.getAffineDimExpr(numLoops + i));
-  AffineMap outMap =
-      AffineMap::get(newNumLoops, 0, outExprs, rewriter.getContext());
-  indexingMaps.push_back(outMap);
+      getOrCreatePackedViewOfOperand(rewriter, genericOp.getLoc(), packInfo,
+                                     genericOp, genericOp.getDpsInitOperand(0));
+  auto packOp = packedOutOperand.getDefiningOp<tensor::PackOp>();
+  assert(packOp && "expect tensor.pack operation");
+  GenericOp newGenericOp =
+      packElementWiseOp(rewriter, genericOp, packOp.getResult(),
+                        packOp.getOuterDimsPerm(), packInfo);
 
-  auto newGenericOp = rewriter.create<linalg::GenericOp>(
-      loc, packOp.getDestType(), inputOperands, packOp.getDest(), indexingMaps,
-      iterTypes, /*bodyBuild=*/nullptr,
-      linalg::getPrunedAttributeList(genericOp));
-  rewriter.cloneRegionBefore(genericOp.getRegion(), newGenericOp.getRegion(),
-                             newGenericOp.getRegion().begin());
+  auto unPackOp = rewriter.create<tensor::UnPackOp>(
+      genericOp.getLoc(),
+      newGenericOp.getTiedOpResult(newGenericOp.getDpsInitOperand(0)),
+      genericOp.getDpsInitOperand(0)->get(), packOp.getInnerDimsPos(),
+      packOp.getMixedTiles(), packOp.getOuterDimsPerm());
+
+  rewriter.replaceOp(genericOp, unPackOp.getResult());
   return newGenericOp;
 }
 
@@ -302,10 +357,26 @@ struct BubbleUpPackOpThroughElemGenericOpPattern
     return success();
   }
 };
+
+// Wrapper pattern that applies pushDownUnPackOpThroughElemGenericOp method.
+struct PushDownUnPackOpThroughElemGenericOp
+    : public OpRewritePattern<GenericOp> {
+  using OpRewritePattern<GenericOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(GenericOp genericOp,
+                                PatternRewriter &rewriter) const override {
+    auto newGenericOp =
+        pushDownUnPackOpThroughElemGenericOp(rewriter, genericOp);
+    if (failed(newGenericOp))
+      return failure();
+    return success();
+  }
+};
+
 } // namespace
 
 void mlir::linalg::populateDataLayoutPropagationPatterns(
     RewritePatternSet &patterns) {
-  patterns.insert<BubbleUpPackOpThroughElemGenericOpPattern>(
-      patterns.getContext());
+  patterns.insert<BubbleUpPackOpThroughElemGenericOpPattern,
+                  PushDownUnPackOpThroughElemGenericOp>(patterns.getContext());
 }
