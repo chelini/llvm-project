@@ -3355,6 +3355,63 @@ Speculation::Speculatability PackOp::getSpeculatability() {
   return Speculation::Speculatable;
 }
 
+namespace {
+
+// unpack(pack(x)) -> x
+struct PackOfUnPack : public OpRewritePattern<PackOp> {
+  using OpRewritePattern<PackOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(PackOp packOp,
+                                PatternRewriter &rewriter) const override {
+    UnPackOp unPackOp = packOp.getSource().getDefiningOp<UnPackOp>();
+    if (!unPackOp || unPackOp.getSourceType() != packOp.getDestType())
+      return failure();
+    if (packOp.getInnerDimsPos() != unPackOp.getInnerDimsPos())
+      return failure();
+    if (packOp.getOuterDimsPerm() != unPackOp.getOuterDimsPerm())
+      return failure();
+    rewriter.replaceOp(packOp, unPackOp.getSource());
+    return success();
+  }
+};
+
+// packing one dimension can be expressed as an expand shape op.
+struct PackToExpandShape : public OpRewritePattern<PackOp> {
+  using OpRewritePattern<PackOp>::OpRewritePattern;
+
+  Value insertExpand(RewriterBase &rewriter, Location loc, Value operand,
+                     Type newOperandType, ArrayAttr reassociation) const {
+    Type operandType = operand.getType();
+    if (operandType == newOperandType)
+      return operand;
+    return rewriter.create<tensor::ExpandShapeOp>(loc, newOperandType, operand,
+                                                  reassociation);
+  }
+
+  LogicalResult matchAndRewrite(PackOp packOp,
+                                PatternRewriter &rewriter) const override {
+    ShapedType sourceType = packOp.getSourceType();
+    ShapedType destType = packOp.getDestType();
+    if (sourceType.getRank() != 1)
+      return failure();
+    auto reassociation =
+        getReassociationIndicesForReshape(sourceType, destType);
+    if (!reassociation)
+      return failure();
+    Value expanded = insertExpand(
+        rewriter, packOp.getLoc(), packOp.getSource(), destType,
+        getReassociationIndicesAttribute(rewriter, *reassociation));
+    rewriter.replaceOp(packOp, expanded);
+    return success();
+  }
+};
+
+} // end namespace
+
+void PackOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                         MLIRContext *ctx) {
+  results.add<PackOfUnPack, PackToExpandShape>(ctx);
+}
+
 //===----------------------------------------------------------------------===//
 // UnPackOp
 //===----------------------------------------------------------------------===//
