@@ -567,6 +567,8 @@ struct ReplaceUnitExtents : public OpRewritePattern<GenericOp> {
     rewriter.inlineRegionBefore(genericOp.getRegion(),
                                 replacementOp.getRegion(),
                                 replacementOp.getRegion().begin());
+    if (auto metadata = genericOp->getAttr("metadata"))
+      replacementOp->setAttr("metadata", metadata);
 
     // If any result tensor has a modified shape, then add reshape to recover
     // the original shape.
