@@ -299,6 +299,14 @@ bubbleUpPackOpThroughElemGenericOp(RewriterBase &rewriter,
   if (genericOp.getNumResults() != 1)
     return failure();
 
+  // Value res = genericOp->getResult(0);
+  // if (!res.hasOneUse())
+  //   return failure();
+
+  // We want to move the pack not the generic.
+  OpBuilder::InsertionGuard guard(rewriter);
+  rewriter.setInsertionPoint(genericOp);
+
   // TODO: Add an option for allowing padding values. It could introduce
   // undefined behavior if we unconditionally propagate pack op through all
   // the ops. E.g., if the padding value is zero and there are division ops in
@@ -319,10 +327,33 @@ bubbleUpPackOpThroughElemGenericOp(RewriterBase &rewriter,
   // operand has not users in the body of the linalg.generic (pure elementwise).
   // If it has users we need to pack the init operand too and replace the init
   // with the packing result.
-  Value dest = (genericOp.getRegionOutputArgs()[0].use_empty())
-                   ? packOp.getDest()
-                   : packedOutOperand;
-
+  Value dest = packedOutOperand;
+  if (genericOp.getRegionOutputArgs()[0].use_empty()) {
+    tensor::EmptyOp oldDest = packOp.getDest().getDefiningOp<tensor::EmptyOp>();
+    if (oldDest) {
+      dest = rewriter.create<tensor::EmptyOp>(
+          genericOp->getLoc(), oldDest.getMixedSizes(),
+          oldDest.getType().getElementType());
+    } else
+      // %l = linalg.generic
+      // ....
+      // ....
+      // %p = tensor.pack %l into %d
+      // use(%p)
+      //
+      // -->
+      //
+      // %p = tensor.pack
+      // %l = linalg.generic
+      // use(%l)
+      //
+      // This can create invalid IR if the destination is not a tensor.empty
+      // and the destionation is created after the linalg.generic.
+      // Possible solution is to restrict the pattern to tensor.pack with an
+      // empty as destination only, because we need to carry with us the tensor
+      // pack.
+      dest = packOp.getDest();
+  }
   return packElementWiseOp(rewriter, genericOp, dest, packedOutIndexingMap,
                            packInfo);
 }
