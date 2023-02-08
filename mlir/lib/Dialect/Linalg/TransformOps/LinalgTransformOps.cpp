@@ -1041,8 +1041,12 @@ transform::MatchOp::apply(transform::TransformResults &results,
       if (iface == transform::MatchInterfaceEnum::LinalgOp &&
           !isa<LinalgOp>(op))
         return;
+      // TODO: should be a !isa<...> ?
       if (iface == transform::MatchInterfaceEnum::TilingInterface &&
           isa<TilingInterface>(op))
+        return;
+      if (iface == transform::MatchInterfaceEnum::BlockedConvolution &&
+          !isaBlockedConvolutionOpInterface(op))
         return;
     }
 

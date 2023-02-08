@@ -55,6 +55,13 @@ struct ConvolutionDimensions {
   SmallVector<unsigned, 2> filterLoop;
   SmallVector<unsigned, 2> inputChannel;
   SmallVector<unsigned, 2> depth;
+
+  bool operator==(const ConvolutionDimensions &other) const {
+    return batch == other.batch && outputImage == other.outputImage &&
+           outputChannel == other.outputChannel &&
+           filterLoop == other.filterLoop &&
+           inputChannel == other.inputChannel && depth == other.depth;
+  }
 };
 
 /// Checks whether `op` conforms to ConvolutionOpInterface and populates
@@ -80,6 +87,14 @@ LogicalResult verifyFillInterface(Operation *op);
 LogicalResult verifyStructuredOpInterface(Operation *op);
 
 } // namespace detail
+
+/// Checks whether `op` conforms to a blocked convolution with the following
+/// block layout: [N][K’][P][Q][k] += [N][C’][H][W][c] * [K’][C’][R][S][c][k].
+/// The method populates `dimensions` with indexes of the different kinds of
+/// dimensions when present.
+bool isaBlockedConvolutionOpInterface(
+    Operation *op, detail::ConvolutionDimensions *dimensions = nullptr);
+
 } // namespace linalg
 } // namespace mlir
 

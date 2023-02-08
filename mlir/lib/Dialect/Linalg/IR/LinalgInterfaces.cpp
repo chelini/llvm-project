@@ -461,6 +461,44 @@ LogicalResult mlir::linalg::detail::verifyConvolutionInterface(Operation *op) {
   return success();
 }
 
+static bool isaBlockedConvolutionOpInterfaceImpl(
+    Operation *op, linalg::detail::ConvolutionDimensions *dimensions) {
+  assert(dimensions && "Expect dimensions to be a valid pointer");
+  if (isConvolutionInterfaceImpl(op, dimensions) !=
+      linalg::detail::MatchConvolutionResult::Success)
+    return false;
+
+  linalg::detail::ConvolutionDimensions expectedDimPosWithBatch{
+      {0},    // batch
+      {2, 3}, // outputImage
+      {1, 4}, // outputChannel
+      {6, 7}, // filterLoop
+      {5, 8}, // inputChannel
+      {}      // depth
+  };
+
+  linalg::detail::ConvolutionDimensions expectedDimPosWithOutBatch{
+      {},     // batch
+      {1, 2}, // outputImage
+      {0, 3}, // outputChannel
+      {5, 6}, // filterLoop
+      {4, 7}, // inputChannel
+      {}      // depth
+  };
+
+  return (*dimensions == expectedDimPosWithBatch ||
+          *dimensions == expectedDimPosWithOutBatch);
+}
+
+bool mlir::linalg::isaBlockedConvolutionOpInterface(
+    Operation *op, linalg::detail::ConvolutionDimensions *dimensions) {
+  if (!dimensions) {
+    detail::ConvolutionDimensions localDimensions;
+    return isaBlockedConvolutionOpInterfaceImpl(op, &localDimensions);
+  }
+  return isaBlockedConvolutionOpInterfaceImpl(op, dimensions);
+}
+
 //===----------------------------------------------------------------------===//
 // FillOpInterface implementation
 //===----------------------------------------------------------------------===//
