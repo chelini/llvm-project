@@ -13,6 +13,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Linalg/IR/LinalgInterfaces.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Linalg/Utils/Utils.h"
 #include "mlir/Dialect/PDL/IR/PDL.h"
@@ -1041,8 +1042,12 @@ transform::MatchOp::apply(transform::TransformResults &results,
       if (iface == transform::MatchInterfaceEnum::LinalgOp &&
           !isa<LinalgOp>(op))
         return;
+      // FIXME: should be a !isa<...> ?
       if (iface == transform::MatchInterfaceEnum::TilingInterface &&
           isa<TilingInterface>(op))
+        return;
+      if (iface == transform::MatchInterfaceEnum::BlockedConvolution &&
+          !isaBlockedConvolutionOpInterface(op))
         return;
     }
 

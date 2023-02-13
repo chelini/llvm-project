@@ -34,17 +34,6 @@ namespace detail {
 /// bounds of the op.
 bool canOpOperandsBeDroppedImpl(linalg::LinalgOp linalgOp,
                                 ArrayRef<OpOperand *> droppedOperands);
-} // namespace detail
-
-/// Checks whether `linalgOp` conforms to ContractionOpInterface.
-// TODO: embed within `isa<ContractionOpInterface>` if possible / natural.
-bool isaContractionOpInterface(LinalgOp linalgOp);
-
-namespace detail {
-
-/// Result of matching a Linalg generic against the predicates of it being a
-/// convolution.
-enum class MatchConvolutionResult;
 
 /// Positions of a Linalg op loops that correspond to different kinds of a
 /// convolution dimension.
@@ -55,7 +44,29 @@ struct ConvolutionDimensions {
   SmallVector<unsigned, 2> filterLoop;
   SmallVector<unsigned, 2> inputChannel;
   SmallVector<unsigned, 2> depth;
+  // C++20: bool operator==(const tfecha&) const = default;
+  bool operator==(const ConvolutionDimensions &other) const {
+    return batch == other.batch && outputImage == other.outputImage &&
+           outputChannel == other.outputChannel &&
+           filterLoop == other.filterLoop &&
+           inputChannel == other.inputChannel && depth == other.depth;
+  }
 };
+
+} // namespace detail
+
+/// Checks whether `linalgOp` conforms to ContractionOpInterface.
+// TODO: embed within `isa<ContractionOpInterface>` if possible / natural.
+bool isaContractionOpInterface(LinalgOp linalgOp);
+/// Checks whether `op` conforms to ConvolutionOpInterface.
+bool isaBlockedConvolutionOpInterface(
+    Operation *op, detail::ConvolutionDimensions *dimensions = nullptr);
+
+namespace detail {
+
+/// Result of matching a Linalg generic against the predicates of it being a
+/// convolution.
+enum class MatchConvolutionResult;
 
 /// Checks whether `op` conforms to ConvolutionOpInterface and populates
 /// `dimensions` with indexes of the different kinds of dimensions when present.

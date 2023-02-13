@@ -73,6 +73,72 @@ transform.sequence failures(propagate) {
         #linalg.iterator_type<parallel>,
         #linalg.iterator_type<reduction>]}
       in %arg1 : (!pdl.operation) -> !pdl.operation
-// expected-remark @below {{0}}
+  // expected-remark @below {{0}}
   transform.test_print_number_of_associated_payload_ir_ops %no_match
+}
+
+// -----
+
+#map = affine_map<(d0, d1, d2, d3, d4, d5, d6, d7, d8) -> (d0, d5, d2 + d6, d3 + d7, d8)>
+#map1 = affine_map<(d0, d1, d2, d3, d4, d5, d6, d7, d8) -> (d1, d5, d6, d7, d8, d4)>
+#map2 = affine_map<(d0, d1, d2, d3, d4, d5, d6, d7, d8) -> (d0, d1, d2, d3, d4)>
+
+func.func @match_blocked_conv(%pack: tensor<1x2x56x56x32xf32>, 
+  %pack_0: tensor<2x2x1x1x32x32xf32>, 
+  %pack_1: tensor<1x2x56x56x32xf32>) -> tensor<1x2x56x56x32xf32> {
+  // expected-remark @below {{matched blocked convolution}}
+  %0 = linalg.generic {
+    indexing_maps = [#map, #map1, #map2], 
+    iterator_types = ["parallel", "parallel", "parallel", "parallel", "parallel", 
+                      "reduction", "reduction", "reduction", "reduction"]} 
+    ins(%pack, %pack_0 : tensor<1x2x56x56x32xf32>, tensor<2x2x1x1x32x32xf32>) 
+    outs(%pack_1 : tensor<1x2x56x56x32xf32>) {
+    ^bb0(%in: f32, %in_2: f32, %out: f32):
+      %1 = arith.mulf %in, %in_2 : f32
+      %2 = arith.addf %out, %1 : f32
+      linalg.yield %2 : f32
+  } -> tensor<1x2x56x56x32xf32>
+  return %0 : tensor<1x2x56x56x32xf32>
+}
+
+transform.sequence failures(propagate) {
+^bb1(%arg1: !pdl.operation):
+  %match_name = transform.structured.match interface{BlockedConvolution}
+    in %arg1 : (!pdl.operation) -> !pdl.operation
+  transform.test_print_remark_at_operand %match_name, "matched blocked convolution" 
+    : !pdl.operation
+  transform.test_consume_operand %match_name : !pdl.operation
+}
+
+// -----
+
+#map = affine_map<(d0, d1, d2, d3, d4, d5, d6, d7) -> (d4, d1 + d5, d2 + d6, d7)>
+#map1 = affine_map<(d0, d1, d2, d3, d4, d5, d6, d7) -> (d0, d4, d5, d6, d7, d3)>
+#map2 = affine_map<(d0, d1, d2, d3, d4, d5, d6, d7) -> (d0, d1, d2, d3)>
+
+func.func @match_blocked_conv(%pack: tensor<2x56x56x32xf32>,
+  %pack_0: tensor<2x2x1x1x32x32xf32>,
+  %pack_1: tensor<2x56x56x32xf32>) -> tensor<2x56x56x32xf32> {
+  // expected-remark @below {{matched blocked convolution}}
+  %0 = linalg.generic {
+    indexing_maps = [#map, #map1, #map2], 
+    iterator_types = ["parallel", "parallel", "parallel", "parallel",
+                      "reduction", "reduction", "reduction", "reduction"]} 
+    ins(%pack, %pack_0 : tensor<2x56x56x32xf32>, tensor<2x2x1x1x32x32xf32>)
+    outs(%pack_1 : tensor<2x56x56x32xf32>) {
+    ^bb0(%in: f32, %in_2: f32, %out: f32):
+      %1 = arith.mulf %in, %in_2 : f32
+      %2 = arith.addf %out, %1 : f32
+      linalg.yield %2 : f32
+  } -> tensor<2x56x56x32xf32>
+  return %0 : tensor<2x56x56x32xf32>
+}
+
+transform.sequence failures(propagate) {
+^bb1(%arg1: !pdl.operation):
+  %match_name = transform.structured.match interface{BlockedConvolution}
+    in %arg1 : (!pdl.operation) -> !pdl.operation
+  transform.test_print_remark_at_operand %match_name, "matched blocked convolution" 
+    : !pdl.operation
+  transform.test_consume_operand %match_name : !pdl.operation
 }

@@ -454,6 +454,47 @@ mlir::linalg::detail::getMatchConvolutionMessage(MatchConvolutionResult res) {
   llvm_unreachable("unhandled MatchConvolutionResult case");
 }
 
+static bool isaBlockedConvolutionOpInterfaceImpl(
+    Operation *op, linalg::detail::ConvolutionDimensions *dimensions) {
+  assert(dimensions && "Expect dimensions to be a valid pointer");
+  if (isConvolutionInterfaceImpl(op, dimensions) !=
+      linalg::detail::MatchConvolutionResult::Success)
+    return false;
+
+  linalg::detail::ConvolutionDimensions expectedDimPosWithBatch{
+      {0},    // batch
+      {2, 3}, // outputImage
+      {1, 4}, // outputChannel
+      {6, 7}, // filterLoop
+      {5, 8}, // inputChannel
+      {}      // depth
+  };
+
+  linalg::detail::ConvolutionDimensions expectedDimPosWithOutBatch{
+      {},     // batch
+      {1, 2}, // outputImage
+      {0, 3}, // outputChannel
+      {5, 6}, // filterLoop
+      {4, 7}, // inputChannel
+      {}      // depth
+  };
+
+  return (*dimensions == expectedDimPosWithBatch ||
+          *dimensions == expectedDimPosWithOutBatch);
+}
+
+/// Return true if the operation is a blocked convolution in the following
+/// layout: [N][K’][P][Q][k] += [N][C’][H][W][c] * [K’][C’][R][S][c][k].
+/// The batch dimension is optional.
+bool mlir::linalg::isaBlockedConvolutionOpInterface(
+    Operation *op, linalg::detail::ConvolutionDimensions *dimensions) {
+  if (!dimensions) {
+    detail::ConvolutionDimensions localDimensions;
+    return isaBlockedConvolutionOpInterfaceImpl(op, &localDimensions);
+  }
+  return isaBlockedConvolutionOpInterfaceImpl(op, dimensions);
+}
+
 LogicalResult mlir::linalg::detail::verifyConvolutionInterface(Operation *op) {
   MatchConvolutionResult res = isConvolutionInterfaceImpl(op);
   if (res != MatchConvolutionResult::Success)
