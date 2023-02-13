@@ -465,10 +465,64 @@ struct PushDownUnPackOpThroughElemGenericOp
   }
 };
 
+/// Propagate a tensor.unpack operation through a tensor.padOp. The idea is to
+/// add as many zero padding dimensions in `high` and `low` based on the number
+/// of point loops.
+struct PropagateThroughPadOp : public OpRewritePattern<tensor::PadOp> {
+  using OpRewritePattern<tensor::PadOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(tensor::PadOp padOp,
+                                PatternRewriter &rewriter) const override {
+    Value inputPad = padOp.getSource();
+    tensor::UnPackOp unpackOp = inputPad.getDefiningOp<tensor::UnPackOp>();
+    if (!unpackOp)
+      return failure();
+
+    Location loc = padOp.getLoc();
+    // Bail out if one of the padded dimension is a tiled one.
+    llvm::SmallBitVector paddedDims = padOp.getPaddedDims();
+    ArrayRef<int64_t> innerDimsPos = unpackOp.getInnerDimsPos();
+    llvm::SmallBitVector innerDims(paddedDims.size());
+    for (int64_t dim : innerDimsPos)
+      innerDims.flip(dim);
+    if (paddedDims.anyCommon(innerDims))
+      return failure();
+
+    // If we have `outer_dims_perms` we need to adjust the padded dimensions.
+    ArrayRef<int64_t> outerDimsPerm = unpackOp.getOuterDimsPerm();
+    SmallVector<OpFoldResult> lowPad = padOp.getMixedLowPad();
+    SmallVector<OpFoldResult> highPad = padOp.getMixedHighPad();
+    if (!outerDimsPerm.empty()) {
+      applyPermutationToVector<OpFoldResult>(lowPad, outerDimsPerm);
+      applyPermutationToVector<OpFoldResult>(highPad, outerDimsPerm);
+    }
+    // Add zero padding for the point loops.
+    size_t pointLoopsSize = innerDimsPos.size();
+    lowPad.append(pointLoopsSize, rewriter.getIndexAttr(0));
+    highPad.append(pointLoopsSize, rewriter.getIndexAttr(0));
+
+    auto newPadOp = rewriter.create<tensor::PadOp>(
+        loc, /*result=*/Type(), unpackOp.getSource(), lowPad, highPad,
+        padOp.getConstantPaddingValue(), padOp.getNofold());
+
+    // Inject the tensor.unpack right after the packed padOp.
+    Value outputUnPack = rewriter.create<tensor::EmptyOp>(
+        loc, padOp.getResultType().getShape(),
+        padOp.getResultType().getElementType());
+
+    Value replacement = rewriter.create<tensor::UnPackOp>(
+        loc, newPadOp.getResult(), outputUnPack, innerDimsPos,
+        unpackOp.getMixedTiles(), outerDimsPerm);
+    rewriter.replaceOp(padOp, replacement);
+    return success();
+  }
+};
+
 } // namespace
 
 void mlir::linalg::populateDataLayoutPropagationPatterns(
     RewritePatternSet &patterns) {
   patterns.insert<BubbleUpPackOpThroughElemGenericOpPattern,
-                  PushDownUnPackOpThroughElemGenericOp>(patterns.getContext());
+                  PushDownUnPackOpThroughElemGenericOp, PropagateThroughPadOp>(
+      patterns.getContext());
 }
