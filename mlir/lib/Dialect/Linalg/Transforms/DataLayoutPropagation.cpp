@@ -189,12 +189,34 @@ static SmallVector<int64_t> computeOuterDims(ArrayRef<int64_t> perm,
   return outerDimsPerm;
 }
 
-/// Returns a tuple for packed operand and indexing_map with the assumptions:
-///   1) The generic op is the producer of the pack op.
-///   2) The generic op has only one result.
-/// If the operand is a scalar or packing dimensions are all irrelevant to the
-/// operand, the operand and the updated indexing map will be returned.
-/// Otherwise, it returns the packed operand and the updated indexing map. E.g.,
+// Given an opOperand coming from a splatted constant tensor, return the packed
+// version of the splat constant and avoid
+static FailureOr<Value> foldSplatConstantOperand(OpBuilder &b,
+                                                 OpOperand *operand,
+                                                 RankedTensorType packedType) {
+  auto cstOp = operand->get().getDefiningOp<arith::ConstantOp>();
+  if (!cstOp)
+    return failure();
+  auto cstVal = cstOp.getValue();
+  if (!cstVal.isa<DenseElementsAttr>())
+    return failure();
+  auto denseAttr = cast<DenseElementsAttr>(cstVal);
+  if (!denseAttr.isSplat())
+    return failure();
+  auto newDenseAttr =
+      DenseElementsAttr::get(packedType, denseAttr.getSplatValue<Attribute>());
+  OpBuilder::InsertionGuard guard(b);
+  b.setInsertionPoint(cstOp);
+  return b.create<arith::ConstantOp>(cstOp.getLoc(), newDenseAttr).getResult();
+}
+
+/// Returns a tuple for packed operand and indexing_map with the
+/// assumptions:
+///   1) The generic op has only one result.
+/// If the operand is a scalar or packing dimensions are all irrelevant to
+/// the operand, the operand and the updated indexing map will be returned.
+/// Otherwise, it returns the packed operand and the updated indexing map.
+/// E.g.,
 ///
 ///   #map0 = affine_map<(d0, d1) -> (d0, d1)>
 ///   #map1 = affine_map<(d0, d1) -> (d0)>
@@ -212,7 +234,8 @@ static SmallVector<int64_t> computeOuterDims(ArrayRef<int64_t> perm,
 ///    inner_tiles = [8, 2]
 ///    into %dest : tensor<?x?xf32> -> tensor<?x?x8x2xf32>
 ///
-///  Taking the first input operand as an example, the inner tile size of d1 is
+///  Taking the first input operand as an example, the inner tile size of d1
+///  is
 ///  8. Thus, the below operation and `affine_map<(d0, d1, d2, d3)> ->
 ///  affine_map<(d1, d3)>` will be returned.
 ///
@@ -220,7 +243,7 @@ static SmallVector<int64_t> computeOuterDims(ArrayRef<int64_t> perm,
 ///    inner_dims_pos = [0]
 ///    inner_tiles = [8]
 ///    into %init : tensor<?xf32> -> tensor<?x8xf32>
-static std::tuple<Value, AffineMap>
+static FailureOr<std::tuple<Value, AffineMap>>
 getOrCreatePackedViewOfOperand(OpBuilder &b, Location loc, PackInfo packInfo,
                                GenericOp genericOp, OpOperand *opOperand) {
   int64_t numOrigLoops = genericOp.getNumLoops();
@@ -287,24 +310,54 @@ getOrCreatePackedViewOfOperand(OpBuilder &b, Location loc, PackInfo packInfo,
   if (innerDimsPos.empty() && outerDimsPerm.empty())
     return std::make_tuple(opOperand->get(), indexingMap);
 
+  // If the OpOperand is a constant tensor, we can pack at compile-time
+  // and avoid paying the price at runtime.
+  // TODO: Avoid building an empty just to get the type.
   auto empty = tensor::PackOp::createDestinationTensor(
       b, loc, opOperand->get(), innerTileSizes, innerDimsPos, outerDimsPerm);
-  auto packedOperand = b.create<tensor::PackOp>(
-      loc, opOperand->get(), empty, innerDimsPos, innerTileSizes,
-      /*padding=*/std::nullopt, outerDimsPerm);
+  auto foldedCstOperand = foldSplatConstantOperand(
+      b, opOperand, empty.getType().cast<RankedTensorType>());
+  if (succeeded(foldedCstOperand))
+    return std::make_tuple(*foldedCstOperand, indexingMap);
+
+  Value packedOperand;
+  auto rankedOpOperand = opOperand->get().getType().cast<RankedTensorType>();
+  if (tensor::PackOp::requirePaddingValue(rankedOpOperand.getShape(),
+                                          innerDimsPos, innerTileSizes)) {
+    // Element-wise gurantees a single operation within
+    // the inner body.
+    if (!isElementwise(genericOp))
+      return failure();
+    Operation &bodyOp = genericOp.getBody()->front();
+    std::optional<TypedAttr> neutralElement = getNeutralElement(&bodyOp);
+    if (!neutralElement.has_value())
+      return failure();
+    Value paddingValue = b.create<arith::ConstantOp>(loc, *neutralElement);
+    packedOperand =
+        b.create<tensor::PackOp>(loc, opOperand->get(), empty, innerDimsPos,
+                                 innerTileSizes, paddingValue, outerDimsPerm);
+  } else {
+    packedOperand = b.create<tensor::PackOp>(
+        loc, opOperand->get(), empty, innerDimsPos, innerTileSizes,
+        /*padding=*/std::nullopt, outerDimsPerm);
+  }
   return std::make_tuple(packedOperand, indexingMap);
 }
 
 /// Pack a linalg genericOp and return it.
-static GenericOp packGenericOp(RewriterBase &rewriter, GenericOp genericOp,
-                               Value dest, AffineMap packedOutIndexingMap,
-                               const PackInfo &packInfo) {
+static FailureOr<GenericOp> packGenericOp(RewriterBase &rewriter,
+                                          GenericOp genericOp, Value dest,
+                                          AffineMap packedOutIndexingMap,
+                                          const PackInfo &packInfo) {
   Location loc = genericOp.getLoc();
   SmallVector<Value> inputOperands;
   SmallVector<AffineMap> indexingMaps;
   for (OpOperand *inputOperand : genericOp.getDpsInputOperands()) {
-    auto [packedOperand, packedIndexingMap] = getOrCreatePackedViewOfOperand(
+    auto packedOperandInfo = getOrCreatePackedViewOfOperand(
         rewriter, loc, packInfo, genericOp, inputOperand);
+    if (failed(packedOperandInfo))
+      return failure();
+    auto [packedOperand, packedIndexingMap] = *packedOperandInfo;
     inputOperands.push_back(packedOperand);
     indexingMaps.push_back(packedIndexingMap);
   }
@@ -432,10 +485,11 @@ bubbleUpPackOpThroughGenericOp(RewriterBase &rewriter, tensor::PackOp packOp,
     return failure();
 
   // Rebuild the indexing map for the corresponding init operand.
-  auto [packedOutOperand, packedOutIndexingMap] =
-      getOrCreatePackedViewOfOperand(rewriter, genericOp.getLoc(), *packInfo,
-                                     genericOp, opOperand);
-
+  auto packedOperandInfo = getOrCreatePackedViewOfOperand(
+      rewriter, genericOp.getLoc(), *packInfo, genericOp, opOperand);
+  if (failed(packedOperandInfo))
+    return failure();
+  auto [packedOutOperand, packedOutIndexingMap] = *packedOperandInfo;
   // If the dps init operand of the generic is a tensor.empty forward the pack
   // op destination.
   Value dest = packedOutOperand;
@@ -546,9 +600,12 @@ pushDownUnPackOpThroughGenericOp(RewriterBase &rewriter, GenericOp genericOp) {
     return failure();
 
   // Rebuild the indexing map for the corresponding init operand.
-  auto [packedOutOperand, packedOutIndexingMap] =
+  auto packedOperandInfo =
       getOrCreatePackedViewOfOperand(rewriter, genericOp.getLoc(), *packInfo,
                                      genericOp, genericOp.getDpsInitOperand(0));
+  if (failed(packedOperandInfo))
+    return failure();
+  auto [packedOutOperand, packedOutIndexingMap] = *packedOperandInfo;
   auto destPack = packedOutOperand.getDefiningOp<tensor::PackOp>();
 
   // If the dps init operand of the generic is a tensor.empty, do not pack it
@@ -562,14 +619,16 @@ pushDownUnPackOpThroughGenericOp(RewriterBase &rewriter, GenericOp genericOp) {
   }
 
   // Pack the genericOp.
-  GenericOp newGenericOp =
+  FailureOr<GenericOp> newGenericOp =
       packGenericOp(rewriter, genericOp, dest, packedOutIndexingMap, *packInfo);
+  if (failed(newGenericOp))
+    return failure();
   Value newResult =
-      newGenericOp.getTiedOpResult(newGenericOp.getDpsInitOperand(0));
+      newGenericOp->getTiedOpResult(newGenericOp->getDpsInitOperand(0));
 
   // If the output is unaffected, no need to unpack.
   if (!destPack)
-    return std::make_tuple(newGenericOp, newResult);
+    return std::make_tuple(*newGenericOp, newResult);
 
   auto mixedTiles = destPack.getMixedTiles();
   auto innerDimsPos = destPack.getInnerDimsPos();
@@ -595,7 +654,7 @@ pushDownUnPackOpThroughGenericOp(RewriterBase &rewriter, GenericOp genericOp) {
                                     mixedTiles, outerDimsPerm)
           .getResult();
 
-  return std::make_tuple(newGenericOp, unPackOpRes);
+  return std::make_tuple(*newGenericOp, unPackOpRes);
 }
 
 // Wrapper pattern that applies pushDownUnPackOpThroughGenericOp method.

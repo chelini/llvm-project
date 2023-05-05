@@ -839,3 +839,89 @@ func.func @unpack_different_destination_shape(%arg0: tensor<1x1x1080x1920x16xi32
 // CHECK-SAME:     inner_dims_pos = [0] inner_tiles = [16]
 // CHECK-SAME:     into %[[UNPACK_NEW_DEST]]
 // CHECK:        return %[[UNPACK]] : tensor<16x540x960xi32>
+
+// -----
+
+#map = affine_map<(d0, d1) -> (d1)>
+#map1 = affine_map<(d0, d1) -> (d0, d1)>
+func.func @propagate_with_padding_1(%arg0: tensor<24x1x16x16xf32>) -> tensor<384x2xf32> {
+  %cst = arith.constant dense<1.000000e+00> : tensor<2xf32>
+  %0 = tensor.empty() : tensor<384x2xf32>
+  %1 = tensor.empty() : tensor<384x2xf32>
+  %unpack = tensor.unpack %arg0 inner_dims_pos = [0, 1] inner_tiles = [16, 16] into %1 : tensor<24x1x16x16xf32> -> tensor<384x2xf32>
+  %2 = linalg.generic {indexing_maps = [#map, #map1, #map1], iterator_types = ["parallel", "parallel"]} ins(%cst, %unpack : tensor<2xf32>, tensor<384x2xf32>) outs(%0 : tensor<384x2xf32>) {
+    ^bb0(%in: f32, %in_0: f32, %out: f32):
+      %3 = arith.addf %in, %in_0 : f32
+      linalg.yield %3 : f32
+  } -> tensor<384x2xf32>
+  return %2 : tensor<384x2xf32>
+}
+
+// CHECK: #[[MAP:.+]] = affine_map<(d0, d1, d2, d3) -> (d1, d3)>
+// CHECK-DAG: #[[MAP1:.+]] = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
+
+// CHECK-LABEL: propagate_with_padding_1
+// CHECK-SAME: %[[ARG0:.+]]: tensor<24x1x16x16xf32>
+// CHECK: %[[CST:.+]] = arith.constant dense<1.000000e+00> : tensor<1x16xf32>
+// CHECK: %[[PADDING_VAL:.+]] = arith.constant 0.000000e+00 : f32
+// CHECK: %[[UNPACKED:.+]] = tensor.empty() : tensor<384x2xf32>
+// CHECK: %[[UNPACK:.+]] = tensor.unpack %[[ARG0]] 
+// CHECK-SAME:  inner_dims_pos = [0, 1] inner_tiles = [16, 16] 
+// CHECK-SAME:  into %[[UNPACKED]] : tensor<24x1x16x16xf32> -> tensor<384x2xf32>
+// CHECK: %[[INIT_GEN:.+]] = tensor.empty() : tensor<24x1x16x16xf32>
+// CHECK: %[[PACKED:.+]] = tensor.empty() : tensor<24x1x16x16xf32>
+// CHECK: %[[PACK:.+]] = tensor.pack %[[UNPACK]] 
+// CHECK-SAME:  padding_value(%[[PADDING_VAL]] : f32) 
+// CHECK-SAME:  inner_dims_pos = [0, 1] inner_tiles = [16, 16] 
+// CHECK-SAME:  into %[[PACKED]] : tensor<384x2xf32> -> tensor<24x1x16x16xf32>
+// CHECK: %[[GEN:.+]] = linalg.generic
+// CHECK-SAME:  indexing_maps = [#[[MAP]], #[[MAP1]], #[[MAP1]]]
+// CHECK-SAME:  iterator_types = ["parallel", "parallel", "parallel", "parallel"]
+// CHECK-SAME:  ins(%[[CST]], %[[PACK]]
+// CHECK-SAME:  outs(%[[INIT_GEN]]
+// CHECK: {{.+}} = tensor.unpack %[[GEN]] 
+// CHECK-SAME:  inner_dims_pos = [0, 1] inner_tiles = [16, 16] 
+// CHECK-SAME:  into %[[UNPACKED]] : tensor<24x1x16x16xf32> -> tensor<384x2xf32>
+
+// -----
+
+#map = affine_map<(d0, d1) -> (d1)>
+#map1 = affine_map<(d0, d1) -> (d0, d1)>
+func.func @propagate_with_padding_2(%arg0: tensor<24x1x16x16xf32>) -> tensor<384x2xf32> {
+  %cst = arith.constant dense<1.000000e+00> : tensor<2xf32>
+  %0 = tensor.empty() : tensor<384x2xf32>
+  %1 = tensor.empty() : tensor<384x2xf32>
+  %unpack = tensor.unpack %arg0 inner_dims_pos = [0, 1] inner_tiles = [16, 16] into %1 : tensor<24x1x16x16xf32> -> tensor<384x2xf32>
+  %2 = linalg.generic {indexing_maps = [#map, #map1, #map1], iterator_types = ["parallel", "parallel"]} ins(%cst, %unpack : tensor<2xf32>, tensor<384x2xf32>) outs(%0 : tensor<384x2xf32>) {
+    ^bb0(%in: f32, %in_0: f32, %out: f32):
+      %3 = arith.mulf %in, %in_0 : f32
+      linalg.yield %3 : f32
+  } -> tensor<384x2xf32>
+  return %2 : tensor<384x2xf32>
+}
+
+// CHECK-DAG: #[[MAP:.+]] = affine_map<(d0, d1, d2, d3) -> (d1, d3)>
+// CHECK-DAG: #[[MAP1:.+]] = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
+
+// CHECK-LABEL: propagate_with_padding_2
+// CHECK-SAME: %[[ARG0:.+]]: tensor<24x1x16x16xf32>
+// CHECK: %[[CST:.+]] = arith.constant dense<1.000000e+00> : tensor<1x16xf32>
+// CHECK: %[[PADDING_VAL:.+]] = arith.constant 1.000000e+00 : f32
+// CHECK: %[[UNPACKED:.+]] = tensor.empty() : tensor<384x2xf32>
+// CHECK: %[[UNPACK:.+]] = tensor.unpack %[[ARG0]] 
+// CHECK-SAME:  inner_dims_pos = [0, 1] inner_tiles = [16, 16] 
+// CHECK-SAME:  into %[[UNPACKED]] : tensor<24x1x16x16xf32> -> tensor<384x2xf32>
+// CHECK: %[[INIT_GEN:.+]] = tensor.empty() : tensor<24x1x16x16xf32>
+// CHECK: %[[PACKED:.+]] = tensor.empty() : tensor<24x1x16x16xf32>
+// CHECK: %[[PACK:.+]] = tensor.pack %[[UNPACK]] 
+// CHECK-SAME:  padding_value(%[[PADDING_VAL]] : f32) 
+// CHECK-SAME:  inner_dims_pos = [0, 1] inner_tiles = [16, 16] 
+// CHECK-SAME:  into %[[PACKED]] : tensor<384x2xf32> -> tensor<24x1x16x16xf32>
+// CHECK: %[[GEN:.+]] = linalg.generic
+// C_HECK-SAME:  indexing_maps = [#[[MAP]], #[[MAP1]], #[[MAP1]]]
+// CHECK-SAME:  iterator_types = ["parallel", "parallel", "parallel", "parallel"]
+// CHECK-SAME:  ins(%[[CST]], %[[PACK]]
+// CHECK-SAME:  outs(%[[INIT_GEN]]
+// CHECK: {{.+}} = tensor.unpack %[[GEN]] 
+// CHECK-SAME:  inner_dims_pos = [0, 1] inner_tiles = [16, 16] 
+// CHECK-SAME:  into %[[UNPACKED]] : tensor<24x1x16x16xf32> -> tensor<384x2xf32>
