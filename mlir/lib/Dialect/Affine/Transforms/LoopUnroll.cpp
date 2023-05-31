@@ -131,6 +131,11 @@ void LoopUnroll::runOnOperation() {
 /// Unrolls a 'affine.for' op. Returns success if the loop was unrolled,
 /// failure otherwise. The default unroll factor is 4.
 LogicalResult LoopUnroll::runOnAffineForOp(AffineForOp forOp) {
+  // If `useAttribute` is set unroll the loop only if it is marked
+  // with the attribute 'unroll_me'.
+  if (useAttribute && !forOp->hasAttr("unroll_me"))
+    return success();
+
   // Use the function callback if one was provided.
   if (getUnrollFactor)
     return loopUnrollByFactor(forOp, getUnrollFactor(forOp),
