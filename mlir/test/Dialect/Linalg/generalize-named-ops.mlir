@@ -286,3 +286,21 @@ func.func @generalize_linalg_map(%arg0: memref<1x8x8x8xf32>) {
     }
   return
 }
+
+// -----
+
+func.func @generalize_add(%arg0: memref<2x16xf32>, %arg1: memref<2x16xf32>) {
+  linalg.elemwise_add ins(%arg0, %arg1: memref<2x16xf32>, memref<2x16xf32>)
+                      outs(%arg1: memref<2x16xf32>)
+  return
+}
+
+// CHECK: #[[MAP:.+]] = affine_map<(d0, d1) -> (d0, d1)>
+
+// CHECK-LABEL: func @generalize_add
+// CHECK-SAME: %[[ARG0:.+]]: memref<2x16xf32>, %[[ARG1:.+]]: memref<2x16xf32>
+// CHECK: linalg.generic
+// CHECK-SAME: indexing_maps = [#[[MAP]], #[[MAP]], #[[MAP]]]
+// CHECK-SAME: iterator_types = ["parallel", "parallel"]
+// CHECK-SAME:  ins(%[[ARG0]], %[[ARG1]]
+// CHECK-SAME:  outs(%[[ARG1]]

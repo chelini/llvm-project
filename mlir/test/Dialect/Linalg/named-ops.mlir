@@ -1184,3 +1184,16 @@ func.func @batchmatmul_transpose_b(%arg0: memref<2x3x5xf32>, %arg1: memref<2x7x5
   linalg.batch_matmul_transpose_b ins(%arg0, %arg1 : memref<2x3x5xf32>, memref<2x7x5xf32>) outs(%arg2: memref<2x3x7xf32>)
   return
 }
+
+// -----
+
+// CHECK-LABEL: func @elemwise_add
+func.func @elemwise_add(%arg0: tensor<2x16xf32>, %arg1: tensor<2x16xf32>) -> tensor<2x16xf32> {
+  %empty = tensor.empty() : tensor<2x16xf32>  
+  // CHECK: linalg.elemwise_add
+  // CHECK-SAME:  ins(%{{.+}}, %{{.+}}: tensor<2x16xf32>, tensor<2x16xf32>)
+  // CHECK-SAME:  outs(%{{.+}}: tensor<2x16xf32>)
+  %add = linalg.elemwise_add ins(%arg0, %arg1: tensor<2x16xf32>, tensor<2x16xf32>)
+                             outs(%empty: tensor<2x16xf32>) -> tensor<2x16xf32>
+  return %add : tensor<2x16xf32>
+}

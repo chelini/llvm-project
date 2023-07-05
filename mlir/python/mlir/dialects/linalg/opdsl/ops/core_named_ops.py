@@ -50,6 +50,19 @@ def elemwise_binary(
     """
     O[None] = fun(cast(U, lhs[None]), cast(U, rhs[None]))
 
+@linalg_structured_op
+def elemwise_add(
+    lhs=TensorDef(T1),
+    rhs=TensorDef(T2),
+    O=TensorDef(U, output=True),
+    cast=TypeFnAttrDef(default=TypeFn.cast_signed),
+):
+    """Applies elementwise addition.
+
+    Numeric casting is performed on the input operand, promoting it to the same
+    data type as the accumulator/output.
+    """
+    O[None] = cast(U, lhs[None]) + cast(U, rhs[None])
 
 @linalg_structured_op
 def matmul(
