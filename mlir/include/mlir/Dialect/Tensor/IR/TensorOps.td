@@ -1823,7 +1823,8 @@ def Tensor_PackOp : Tensor_RelayoutOp<"pack", [
 
     // Returns true if we have enough static information to catch undefined
     // behavior when the tile size does not divide perfectly the dimension of
-    // the input tensor.
+    // the input tensor. No assumption are made on the divisibility if the tile
+    // or the dimension (or both) are dynamic.
     static bool requirePaddingValue(ArrayRef<int64_t> inputShape,
                                     ArrayRef<int64_t> innerDimsPos,
                                     ArrayRef<OpFoldResult> innerTiles);
