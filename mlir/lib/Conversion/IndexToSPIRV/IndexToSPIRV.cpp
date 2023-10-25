@@ -310,6 +310,7 @@ struct ConvertIndexCmpPattern final : OpConversionPattern<CmpOp> {
     case IndexCmpPredicate::ULT:
       return rewriteCmpOp<spirv::ULessThanOp>(op, adaptor, rewriter);
     }
+    return failure();
   }
 };
 
