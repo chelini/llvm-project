@@ -38,3 +38,11 @@ func.func @no_side_effects() {
   "test.unregistered_op_foo"(%0) : (memref<5xf32>) -> ()
   return
 }
+
+// -----
+
+// We should not emit any error here as the operation does not operate on buffer.
+func.func @no_buffer_semantics(%v0: vector<9x6xf32>) {
+  vector.print %v0 : vector<9x6xf32>
+  return
+}

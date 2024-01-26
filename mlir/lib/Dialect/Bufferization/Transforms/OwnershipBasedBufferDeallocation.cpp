@@ -502,6 +502,11 @@ BufferDeallocation::verifyFunctionPreconditions(FunctionOpInterface op) {
 }
 
 LogicalResult BufferDeallocation::verifyOperationPreconditions(Operation *op) {
+  // We do not care about ops that do not operate on buffers and have no
+  // Allocate/Free side effect.
+  if (!hasBufferSemantics(op) && hasNeitherAllocateNorFreeSideEffect(op))
+    return success();
+
   // (1) The pass does not work properly when deallocations are already present.
   // Alternatively, we could also remove all deallocations as a pre-pass.
   if (isa<DeallocOp>(op))
@@ -522,11 +527,6 @@ LogicalResult BufferDeallocation::verifyOperationPreconditions(Operation *op) {
     return op->emitError(
         "ops with unknown memory side effects are not supported");
 
-  // We do not care about ops that do not operate on buffers and have no
-  // Allocate/Free side effect.
-  if (!hasBufferSemantics(op) && hasNeitherAllocateNorFreeSideEffect(op))
-    return success();
-
   // (3) Check that the control flow structures are supported.
   auto regions = op->getRegions();
   // Check that if the operation has at
@@ -542,7 +542,7 @@ LogicalResult BufferDeallocation::verifyOperationPreconditions(Operation *op) {
                          "implement the RegionBranchOpInterface.");
   }
 
-  // (3) Check that terminators with more than one successor except `cf.cond_br`
+  // (4) Check that terminators with more than one successor except `cf.cond_br`
   // are not present and that either BranchOpInterface or
   // RegionBranchTerminatorOpInterface is implemented.
   if (op->hasTrait<OpTrait::NoTerminator>())
