@@ -2739,7 +2739,7 @@ def SysVABI : DeclOrTypeAttr {
   let Documentation = [Undocumented];
 }
 
-def Syntax : Attr {
+def Syntax : DeclOrTypeAttr {
   let Spellings = [Clang<"syntax">];
   let Args = [IdentifierArgument<"Name">];
   let Subjects = SubjectList<[Function], ErrorDiag>;

@@ -1,6 +1,6 @@
 add_llvm_library(PrintTokensSyntax MODULE PrintTokensSyntax.cpp PLUGIN_TOOL clang)
 
-if(LLVM_ENABLE_PLUGINS)
+if(WIN32 OR CYGWIN)
   set(LLVM_LINK_COMPONENTS
     Support
   )

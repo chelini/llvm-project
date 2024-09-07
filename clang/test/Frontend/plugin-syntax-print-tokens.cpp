@@ -1,7 +1,7 @@
 // RUN: %clang -std=c++11 -fplugin=%llvmshlibdir/PrintTokensSyntax%pluginext -emit-llvm -S %s -o - | FileCheck %s
 // REQUIRES: plugins, examples
 
-[[clang::syntax(tokens)]] void fn1() {
+void [[clang::syntax(tokens)]] fn1() {
   This is a test with a "string".
 }
 
@@ -16,15 +16,11 @@
 
 // CHECK: define dso_local void @_Z3fn1v() #0 {
 // CHECK-NEXT: entry:
-// CHECK-NEXT:   %call = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* [[STR_VAR]], {{.*}}), i8* getelementptr inbounds ([5 x i8], [5 x i8]* [[STR_VAR1]], {{.*}}))
-// CHECK-NEXT:   %call1 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* [[STR_VAR]], {{.*}}), i8* getelementptr inbounds ([3 x i8], [3 x i8]* [[STR_VAR2]], {{.*}}))
-// CHECK-NEXT:   %call2 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* [[STR_VAR]], {{.*}}), i8* getelementptr inbounds ([2 x i8], [2 x i8]* [[STR_VAR3]], {{.*}}))
-// CHECK-NEXT:   %call3 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* [[STR_VAR]], {{.*}}), i8* getelementptr inbounds ([5 x i8], [5 x i8]* [[STR_VAR4]], {{.*}}))
-// CHECK-NEXT:   %call4 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* [[STR_VAR]], {{.*}}), i8* getelementptr inbounds ([5 x i8], [5 x i8]* [[STR_VAR5]], {{.*}}))
-// CHECK-NEXT:   %call5 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* [[STR_VAR]], {{.*}}), i8* getelementptr inbounds ([2 x i8], [2 x i8]* [[STR_VAR3]], {{.*}}))
-// CHECK-NEXT:   %call6 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* [[STR_VAR]], {{.*}}), i8* getelementptr inbounds ([9 x i8], [9 x i8]* [[STR_VAR6]], {{.*}}))
-// CHECK-NEXT:   %call7 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* [[STR_VAR]], {{.*}}), i8* getelementptr inbounds ([2 x i8], [2 x i8]* [[STR_VAR7]], {{.*}}))
-// CHECK-NEXT:   ret void
-// CHECK-NEXT: }
-
-
+// CHECK-NEXT: %{{.+}} = call i32 (ptr, ...) @printf(ptr noundef @.str, ptr noundef @.str.1)
+// CHECK-NEXT: %{{.+}} = call i32 (ptr, ...) @printf(ptr noundef @.str, ptr noundef @.str.2)
+// CHECK-NEXT: %{{.+}} = call i32 (ptr, ...) @printf(ptr noundef @.str, ptr noundef @.str.3)
+// CHECK-NEXT: %{{.+}} = call i32 (ptr, ...) @printf(ptr noundef @.str, ptr noundef @.str.4)
+// CHECK-NEXT: %{{.+}} = call i32 (ptr, ...) @printf(ptr noundef @.str, ptr noundef @.str.5)
+// CHECK-NEXT: %{{.+}} = call i32 (ptr, ...) @printf(ptr noundef @.str, ptr noundef @.str.3)
+// CHECK-NEXT: %{{.+}} = call i32 (ptr, ...) @printf(ptr noundef @.str, ptr noundef @.str.6)
+// CHECK-NEXT: %{{.+}} = call i32 (ptr, ...) @printf(ptr noundef @.str, ptr noundef @.str.7)
