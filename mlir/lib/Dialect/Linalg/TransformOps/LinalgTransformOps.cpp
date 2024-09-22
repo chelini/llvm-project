@@ -1946,24 +1946,34 @@ transform::ReplaceOp::apply(transform::TransformRewriter &rewriter,
                             TransformState &state) {
   auto payload = state.getPayloadOps(getTarget());
 
+  SmallVector<Value> replOperands;
+  for (auto newOperand : getNewOperands()) {
+    for (Value v : state.getPayloadValues(newOperand)) {
+      replOperands.push_back(v);
+    }
+  }
+
   // Check for invalid targets.
   for (Operation *target : payload) {
-    if (target->getNumOperands() > 0)
-      return emitDefiniteFailure() << "expected target without operands";
-    if (!target->hasTrait<OpTrait::IsIsolatedFromAbove>() &&
-        target->getNumRegions() > 0)
+    if (target->getNumOperands() != replOperands.size())
       return emitDefiniteFailure()
-             << "expected target that is isolated from above";
+             << "expected target with " << replOperands.size() << " operands";
   }
 
   // Clone and replace.
   Operation *pattern = &getBodyRegion().front().front();
+  assert(replOperands.size() == pattern->getNumOperands() &&
+         "invalid operation");
+
+  IRMapping mapper;
+  mapper.map(pattern->getOperands(), replOperands);
+
   SmallVector<Operation *> replacements;
   for (Operation *target : payload) {
     if (getOperation()->isAncestor(target))
       continue;
     rewriter.setInsertionPoint(target);
-    Operation *replacement = rewriter.clone(*pattern);
+    Operation *replacement = rewriter.clone(*pattern, mapper);
     rewriter.replaceOp(target, replacement->getResults());
     replacements.push_back(replacement);
   }
@@ -1974,6 +1984,7 @@ transform::ReplaceOp::apply(transform::TransformRewriter &rewriter,
 void transform::ReplaceOp::getEffects(
     SmallVectorImpl<MemoryEffects::EffectInstance> &effects) {
   consumesHandle(getTarget(), effects);
+  consumesHandle(getNewOperands(), effects);
   producesHandle(getReplacement(), effects);
   modifiesPayload(effects);
 }
@@ -1985,13 +1996,12 @@ LogicalResult transform::ReplaceOp::verify() {
                     getBodyRegion().front().end()) != 1)
     return emitOpError() << "expected one operation in block";
   Operation *replacement = &getBodyRegion().front().front();
-  if (replacement->getNumOperands() > 0)
-    return replacement->emitOpError()
-           << "expected replacement without operands";
-  if (!replacement->hasTrait<OpTrait::IsIsolatedFromAbove>() &&
-      replacement->getNumRegions() > 0)
-    return replacement->emitOpError()
-           << "expect op that is isolated from above";
+  if (replacement->getNumOperands() != getNewOperands().size())
+    return replacement->emitOpError() << "expected replacement with "
+                                      << getNewOperands().size() << " operands";
+  // if (replacement->getNumRegions() > 0)
+  //   return replacement->emitOpError()
+  //          << "expect op with single region";
   return success();
 }
 

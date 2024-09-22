@@ -1167,12 +1167,14 @@ def ReplaceOp : Op<Transform_Dialect, "structured.replace",
     This operation consumes the `target` handle.
   }];
 
-  let arguments = (ins TransformHandleTypeInterface:$target);
+  let arguments = (ins TransformHandleTypeInterface:$target,
+    Variadic<Transform_AnyValue>:$new_operands);
   let results = (outs TransformHandleTypeInterface:$replacement);
   let regions = (region SizedRegion<1>:$bodyRegion);
   let assemblyFormat =
-      "$target attr-dict-with-keyword regions `:` "
-      "custom<SemiFunctionType>(type($target), type($replacement))";
+      "$target (`(` $new_operands^ `:` type($new_operands) `)`)? "
+      "attr-dict-with-keyword regions `:` "
+      "`(`type($target) `)` `->` type($replacement)";
   let hasVerifier = 1;
 }
 
@@ -1834,7 +1836,7 @@ def TileUsingForallOp :
     Tiling is applied by either specifying `num_threads` or `tile_size`. If
     `num_threads` is specified, then the tile size for each dimension `i` is
     calculated dynamically via `ceilDiv(dimSize[i], num_threads[i])`.
-    `num_threads` and `tile_size` can be either static index attributes or 
+    `num_threads` and `tile_size` can be either static index attributes or
     operation handles (or a mix thereof). Operation handles must be mapped to
     exactly one op that has exactly one result of index type.
 
@@ -2021,7 +2023,7 @@ def VectorizeOp : Op<Transform_Dialect, "structured.vectorize",
     [DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
      TransformOpInterface, ReportTrackingListenerFailuresOpTrait]> {
   let description = [{
-    Vectorize the target ops, which must be Linalg ops. 
+    Vectorize the target ops, which must be Linalg ops.
 
     Use the optional vector sizes to specify exactly what configuration the
     vectorizer should use. It will then use masked vectors of the specified
@@ -2051,7 +2053,7 @@ def VectorizeOp : Op<Transform_Dialect, "structured.vectorize",
     This operation produces a silenceable failure if at least one target op is
     not a Linalg op or fails to vectorize. It produces a definite failure if
     the dynamic vector sizes (SSA values) do not satisfy the constraints
-    mentioned above. 
+    mentioned above.
   }];
 
   let arguments = (ins TransformHandleTypeInterface:$target,
