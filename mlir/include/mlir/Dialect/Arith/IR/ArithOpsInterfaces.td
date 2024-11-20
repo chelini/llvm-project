@@ -50,7 +50,7 @@ def ArithFastMathInterface : OpInterface<"ArithFastMathInterface"> {
 
 def ArithIntegerOverflowFlagsInterface : OpInterface<"ArithIntegerOverflowFlagsInterface"> {
   let description = [{
-    Access to op integer overflow flags.
+    Access to operation integer overflow flags.
   }];
 
   let cppNamespace = "::mlir::arith";
@@ -107,7 +107,7 @@ def ArithIntegerOverflowFlagsInterface : OpInterface<"ArithIntegerOverflowFlagsI
 
 def ArithRoundingModeInterface : OpInterface<"ArithRoundingModeInterface"> {
   let description = [{
-    Access to op rounding mode.
+    Access to operation rounding mode.
   }];
 
   let cppNamespace = "::mlir::arith";
@@ -141,7 +141,7 @@ def ArithRoundingModeInterface : OpInterface<"ArithRoundingModeInterface"> {
 
 def ArithDenormalModeInterface : OpInterface<"ArithDenormalModeInterface"> {
   let description = [{
-    Access to op denormal mode.
+    Access the operation denormal modes.
   }];
 
   let cppNamespace = "::mlir::arith";

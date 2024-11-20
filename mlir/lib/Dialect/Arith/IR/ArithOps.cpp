@@ -986,7 +986,7 @@ OpFoldResult arith::SubFOp::fold(FoldAdaptor adaptor) {
   // 1. `rhs` is a denormal floating-point value.
   // 2. The denormal mode for the operation is set to positive zero.
   bool isPositiveZeroMode =
-      getDenormalModeAttr().getValue() == DenormalMode::positve_zero;
+      getDenormalModeAttr().getValue() == DenormalMode::positive_zero;
   if (isPositiveZeroMode && matchPattern(adaptor.getRhs(), m_isDenormalFloat()))
     return getLhs();
 
@@ -2641,6 +2641,20 @@ Value mlir::arith::getReductionOp(AtomicRMWKind op, OpBuilder &builder,
     break;
   }
   return nullptr;
+}
+
+//===----------------------------------------------------------------------===//
+// DenormalModeAttr
+//===----------------------------------------------------------------------===//
+
+LogicalResult DenormalModeAttr::verify(
+    llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
+    DenormalMode mode) {
+  auto value = static_cast<uint32_t>(mode);
+  bool isSingleBitSet = (value & (value - 1)) == 0;
+  if (!isSingleBitSet)
+    return emitError() << "expected only a single denormal mode";
+  return success();
 }
 
 //===----------------------------------------------------------------------===//

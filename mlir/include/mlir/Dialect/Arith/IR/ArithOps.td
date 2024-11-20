@@ -71,6 +71,7 @@ class Arith_FloatUnaryOp<string mnemonic, list<Trait> traits = []> :
         Arith_DenormalModeAttr, "::mlir::arith::DenormalMode::ieee">:$denormal)>,
     Results<(outs FloatLike:$result)> {
   let assemblyFormat = [{ $operand (`fastmath` `` $fastmath^)?
+                          (`denormal` `` $denormal^)?
                           attr-dict `:` type($result) }];
 }
 
@@ -87,7 +88,8 @@ class Arith_FloatBinaryOp<string mnemonic, list<Trait> traits = []> :
       DefaultValuedAttr<
         Arith_DenormalModeAttr, "::mlir::arith::DenormalMode::ieee">:$denormal)>,
     Results<(outs FloatLike:$result)> {
-  let assemblyFormat = [{ $lhs `,` $rhs (`fastmath` `` $fastmath^)? (`denormal` `` $denormal^)?
+  let assemblyFormat = [{ $lhs `,` $rhs (`fastmath` `` $fastmath^)? 
+                          (`denormal` `` $denormal^)?
                           attr-dict `:` type($result) }];
 }
 
