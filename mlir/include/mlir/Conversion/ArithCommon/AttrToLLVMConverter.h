@@ -51,7 +51,7 @@ getLLVMDefaultFPExceptionBehavior(MLIRContext &context);
 template <typename SourceOp, typename TargetOp>
 class AttrConvertFastMathToLLVM {
 public:
-  AttrConvertFastMathToLLVM(SourceOp srcOp) {
+  explicit AttrConvertFastMathToLLVM(SourceOp srcOp) {
     // Copy the source attributes.
     convertedAttr = NamedAttrList{srcOp->getAttrs()};
     // Get the name of the arith fastmath attribute.
@@ -75,13 +75,47 @@ private:
   NamedAttrList convertedAttr;
 };
 
+// Attribute converter that populates a NamedAttrList by removing the fastmath
+// and denormal attribute from the source operation attributes, and replacing it
+// with an equivalent LLVM fastmath (or denormal) attribute.
+template <typename SourceOp, typename TargetOp>
+class AttrConvertFastMathAndDenoramlToLLVM {
+public:
+  explicit AttrConvertFastMathAndDenoramlToLLVM(SourceOp srcOp) {
+    // Copy the source attributes.
+    convertedAttr = NamedAttrList{srcOp->getAttrs()};
+    // Get the name of the arith fastmath attribute.
+    StringRef arithFMFAttrName = SourceOp::getFastMathAttrName();
+    // Remove the source fastmath attribute.
+    auto arithFMFAttr = dyn_cast_if_present<arith::FastMathFlagsAttr>(
+        convertedAttr.erase(arithFMFAttrName));
+    if (arithFMFAttr) {
+      StringRef targetAttrName = TargetOp::getFastmathAttrName();
+      convertedAttr.set(targetAttrName,
+                        convertArithFastMathAttrToLLVM(arithFMFAttr));
+    }
+
+    // For now simply erase denormals.
+    StringRef denormalAttrName = SourceOp::getDenormalModeAttrName();
+    convertedAttr.erase(denormalAttrName);
+  }
+
+  ArrayRef<NamedAttribute> getAttrs() const { return convertedAttr.getAttrs(); }
+  LLVM::IntegerOverflowFlags getOverflowFlags() const {
+    return LLVM::IntegerOverflowFlags::none;
+  }
+
+private:
+  NamedAttrList convertedAttr;
+};
+
 // Attribute converter that populates a NamedAttrList by removing the overflow
 // attribute from the source operation attributes, and replacing it with an
 // equivalent LLVM overflow attribute.
 template <typename SourceOp, typename TargetOp>
 class AttrConvertOverflowToLLVM {
 public:
-  AttrConvertOverflowToLLVM(SourceOp srcOp) {
+  explicit AttrConvertOverflowToLLVM(SourceOp srcOp) {
     // Copy the source attributes.
     convertedAttr = NamedAttrList{srcOp->getAttrs()};
     // Get the name of the arith overflow attribute.
@@ -109,7 +143,7 @@ class AttrConverterConstrainedFPToLLVM {
                 "LLVM::FPExceptionBehaviorOpInterface");
 
 public:
-  AttrConverterConstrainedFPToLLVM(SourceOp srcOp) {
+  explicit AttrConverterConstrainedFPToLLVM(SourceOp srcOp) {
     // Copy the source attributes.
     convertedAttr = NamedAttrList{srcOp->getAttrs()};
 

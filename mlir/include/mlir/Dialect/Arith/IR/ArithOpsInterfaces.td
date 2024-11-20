@@ -45,7 +45,6 @@ def ArithFastMathInterface : OpInterface<"ArithFastMathInterface"> {
         return "fastmath";
       }]
       >
-
   ];
 }
 
@@ -138,5 +137,40 @@ def ArithRoundingModeInterface : OpInterface<"ArithRoundingModeInterface"> {
     >
   ];
 }
+
+
+def ArithDenormalModeInterface : OpInterface<"ArithDenormalModeInterface"> {
+  let description = [{
+    Access to op denormal mode.
+  }];
+
+  let cppNamespace = "::mlir::arith";
+
+  let methods = [
+    InterfaceMethod<
+      /*desc=*/        "Returns a DenormalModeAttr attribute for the operation",
+      /*returnType=*/  "DenormalModeAttr",
+      /*methodName=*/  "getDenormalModeAttr",
+      /*args=*/        (ins),
+      /*methodBody=*/  [{}],
+      /*defaultImpl=*/ [{
+        auto op = cast<ConcreteOp>(this->getOperation());
+        return op.getDenormalAttr();
+      }]
+    >,
+    StaticInterfaceMethod<
+      /*desc=*/        [{Returns the name of the DenormalModeAttr attribute for
+                         the operation}],
+      /*returnType=*/  "StringRef",
+      /*methodName=*/  "getDenormalModeAttrName",
+      /*args=*/        (ins),
+      /*methodBody=*/  [{}],
+      /*defaultImpl=*/ [{
+        return "denormal";
+      }]
+    >
+  ];
+}
+
 
 #endif // ARITH_OPS_INTERFACES
