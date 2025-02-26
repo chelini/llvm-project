@@ -11,7 +11,7 @@
 
 include "mlir/Pass/PassBase.td"
 
-def OwnershipBasedBufferDeallocation : Pass<
+def OwnershipBasedBufferDeallocationPass : Pass<
     "ownership-based-buffer-deallocation"> {
   let summary = "Adds all required dealloc operations for all allocations in "
                 "the input program";
@@ -144,7 +144,6 @@ def OwnershipBasedBufferDeallocation : Pass<
            "dynamically pass ownership of memrefs to callees. This can enable "
            "earlier deallocations.">,
   ];
-  let constructor = "mlir::bufferization::createOwnershipBasedBufferDeallocationPass()";
 
   let dependentDialects = [
     "mlir::bufferization::BufferizationDialect", "mlir::arith::ArithDialect",
@@ -152,7 +151,7 @@ def OwnershipBasedBufferDeallocation : Pass<
   ];
 }
 
-def BufferDeallocationSimplification :
+def BufferDeallocationSimplificationPass :
     Pass<"buffer-deallocation-simplification"> {
   let summary = "Optimizes `bufferization.dealloc` operation for more "
                 "efficient codegen";
@@ -163,32 +162,28 @@ def BufferDeallocationSimplification :
     some memref isn't deallocated twice (double free).
   }];
 
-  let constructor =
-    "mlir::bufferization::createBufferDeallocationSimplificationPass()";
-
   let dependentDialects = [
     "mlir::bufferization::BufferizationDialect", "mlir::arith::ArithDialect",
     "mlir::memref::MemRefDialect"
   ];
 }
 
-def OptimizeAllocationLiveness
+def OptimizeAllocationLivenessPass
     : Pass<"optimize-allocation-liveness", "func::FuncOp"> {
   let summary = "This pass optimizes the liveness of temp allocations in the "
                 "input function";
-  let description =
-       [{This pass will find all operations that have a memory allocation effect.
-       It will search for the corresponding deallocation and move it right after
-       the last user of the allocation.
-       This will optimize the liveness of the allocations.
+  let description = [{
+      This pass will find all operations that have a memory allocation effect.
+      It will search for the corresponding deallocation and move it right after
+      the last user of the allocation.
+      This will optimize the liveness of the allocations.
 
-       The pass is expected to run after the deallocation pipeline.}];
-  let constructor =
-      "mlir::bufferization::createOptimizeAllocationLivenessPass()";
+      The pass is expected to run after the deallocation pipeline.
+  }];
   let dependentDialects = ["mlir::memref::MemRefDialect"];
 }
 
-def LowerDeallocations : Pass<"bufferization-lower-deallocations"> {
+def LowerDeallocationsPass : Pass<"bufferization-lower-deallocations"> {
   let summary = "Lowers `bufferization.dealloc` operations to `memref.dealloc`"
                 "operations";
   let description = [{
@@ -202,36 +197,31 @@ def LowerDeallocations : Pass<"bufferization-lower-deallocations"> {
     library functions to avoid code-size blow-up.
   }];
 
-  let constructor =
-    "mlir::bufferization::createLowerDeallocationsPass()";
-
   let dependentDialects = [
     "arith::ArithDialect", "memref::MemRefDialect", "scf::SCFDialect",
     "func::FuncDialect"
   ];
 }
 
-def BufferHoisting : Pass<"buffer-hoisting", "func::FuncOp"> {
+def BufferHoistingPass : Pass<"buffer-hoisting", "func::FuncOp"> {
   let summary = "Optimizes placement of allocation operations by moving them "
                 "into common dominators and out of nested regions";
   let description = [{
     This pass implements an approach to aggressively move allocations upwards
     into common dominators and out of nested regions.
   }];
-  let constructor = "mlir::bufferization::createBufferHoistingPass()";
 }
 
-def BufferLoopHoisting : Pass<"buffer-loop-hoisting", "func::FuncOp"> {
+def BufferLoopHoistingPass : Pass<"buffer-loop-hoisting", "func::FuncOp"> {
   let summary = "Optimizes placement of allocation operations by moving them "
                 "out of loop nests";
   let description = [{
     This pass implements an approach to aggressively move allocations upwards
     out of loop nests. It does not move allocations into common dominators.
   }];
-  let constructor = "mlir::bufferization::createBufferLoopHoistingPass()";
 }
 
-def BufferResultsToOutParams : Pass<"buffer-results-to-out-params", "ModuleOp">  {
+def BufferResultsToOutParamsPass : Pass<"buffer-results-to-out-params", "ModuleOp">  {
   let summary = "Converts memref-typed function results to out-params";
   let description = [{
     Some calling conventions prefer to pass output memrefs as "out params". The
@@ -266,11 +256,10 @@ def BufferResultsToOutParams : Pass<"buffer-results-to-out-params", "ModuleOp"> 
        "bool", /*default=*/"false",
        "Hoist static allocations to call sites.">,
   ];
-  let constructor = "mlir::bufferization::createBufferResultsToOutParamsPass()";
   let dependentDialects = ["memref::MemRefDialect"];
 }
 
-def DropEquivalentBufferResults : Pass<"drop-equivalent-buffer-results", "ModuleOp">  {
+def DropEquivalentBufferResultsPass : Pass<"drop-equivalent-buffer-results", "ModuleOp">  {
   let summary = "Remove MemRef return values that are equivalent to a bbArg";
   let description = [{
     This pass removes MemRef return values from functions if they are equivalent
@@ -280,22 +269,20 @@ def DropEquivalentBufferResults : Pass<"drop-equivalent-buffer-results", "Module
     Note: If a bbArg buffer is not returned directly but casted to beforehand,
     the buffer is still considered equivalent.
   }];
-  let constructor = "mlir::bufferization::createDropEquivalentBufferResultsPass()";
   let dependentDialects = ["memref::MemRefDialect"];
 }
 
-def EmptyTensorToAllocTensor : Pass<"empty-tensor-to-alloc-tensor"> {
+def EmptyTensorToAllocTensorPass : Pass<"empty-tensor-to-alloc-tensor"> {
   let summary = "Replace all empty ops by alloc_tensor ops.";
   let description = [{
     tensor.empty ops return a tensor of unspecified contents who's only purpose
     is to carry the tensor shape. This pass converts such ops to
     bufferization.alloc_tensor ops, which bufferize to buffer allocations.
   }];
-  let constructor = "mlir::bufferization::createEmptyTensorToAllocTensorPass()";
   let dependentDialects = ["tensor::TensorDialect"];
 }
 
-def OneShotBufferize : Pass<"one-shot-bufferize", "ModuleOp"> {
+def OneShotBufferizePass : Pass<"one-shot-bufferize", "ModuleOp"> {
   let summary = "One-Shot Bufferize";
   let description = [{
     This pass bufferizes all ops that implement `BufferizableOpInterface`. It
@@ -455,7 +442,6 @@ def OneShotBufferize : Pass<"one-shot-bufferize", "ModuleOp"> {
     Option<"bufferAlignment", "buffer-alignment", "uint64_t", /*default=*/"64",
            "Sets the alignment of newly allocated buffers.">,
   ];
-  let constructor = "mlir::bufferization::createOneShotBufferizePass()";
 
   let statistics = [
     Statistic<"numBufferAlloc", "num-buffer-alloc",
@@ -467,7 +453,7 @@ def OneShotBufferize : Pass<"one-shot-bufferize", "ModuleOp"> {
   ];
 }
 
-def PromoteBuffersToStack : Pass<"promote-buffers-to-stack", "func::FuncOp"> {
+def PromoteBuffersToStackPass : Pass<"promote-buffers-to-stack", "func::FuncOp"> {
   let summary = "Promotes heap-based allocations to automatically managed "
                 "stack-based allocations";
   let description = [{
@@ -477,7 +463,6 @@ def PromoteBuffersToStack : Pass<"promote-buffers-to-stack", "func::FuncOp"> {
     shaped buffers that are limited by the rank of the tensor can be
     converted. They are only transformed if they are considered to be small.
   }];
-  let constructor = "mlir::bufferization::createPromoteBuffersToStackPass()";
   let options = [
     Option<"maxAllocSizeInBytes", "max-alloc-size-in-bytes", "unsigned",
            /*default=*/"1024",
@@ -488,7 +473,7 @@ def PromoteBuffersToStack : Pass<"promote-buffers-to-stack", "func::FuncOp"> {
   ];
 }
 
-def EmptyTensorElimination : Pass<"eliminate-empty-tensors"> {
+def EmptyTensorEliminationPass : Pass<"eliminate-empty-tensors"> {
   let summary = "Try to eliminate all tensor.empty ops.";
   let description = [{
     Try to eliminate "tensor.empty" ops inside `op`. This transformation looks
@@ -508,7 +493,6 @@ def EmptyTensorElimination : Pass<"eliminate-empty-tensors"> {
     "tensor.empty" op. The "tensor.empty" op is replaced with a
     "tensor.extract_slice" op.
   }];
-  let constructor = "mlir::bufferization::createEmptyTensorEliminationPass()";
 }
 
 #endif // MLIR_DIALECT_BUFFERIZATION_TRANSFORMS_PASSES
