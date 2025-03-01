@@ -23,7 +23,7 @@
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
 namespace mlir {
-#define GEN_PASS_DEF_SCFPARALLELLOOPFUSION
+#define GEN_PASS_DEF_SCFPARALLELLOOPFUSIONPASS
 #include "mlir/Dialect/SCF/Transforms/Passes.h.inc"
 } // namespace mlir
 
@@ -266,7 +266,7 @@ void mlir::scf::naivelyFuseParallelOps(
 
 namespace {
 struct ParallelLoopFusion
-    : public impl::SCFParallelLoopFusionBase<ParallelLoopFusion> {
+    : public impl::SCFParallelLoopFusionPassBase<ParallelLoopFusion> {
   void runOnOperation() override {
     auto &AA = getAnalysis<AliasAnalysis>();
 
@@ -281,7 +281,3 @@ struct ParallelLoopFusion
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> mlir::createParallelLoopFusionPass() {
-  return std::make_unique<ParallelLoopFusion>();
-}

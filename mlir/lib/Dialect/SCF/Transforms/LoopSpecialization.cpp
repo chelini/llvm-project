@@ -27,9 +27,9 @@
 #include "llvm/ADT/DenseMap.h"
 
 namespace mlir {
-#define GEN_PASS_DEF_SCFFORLOOPPEELING
-#define GEN_PASS_DEF_SCFFORLOOPSPECIALIZATION
-#define GEN_PASS_DEF_SCFPARALLELLOOPSPECIALIZATION
+#define GEN_PASS_DEF_SCFFORLOOPPEELINGPASS
+#define GEN_PASS_DEF_SCFFORLOOPSPECIALIZATIONPASS
+#define GEN_PASS_DEF_SCFPARALLELLOOPSPECIALIZATIONPASS
 #include "mlir/Dialect/SCF/Transforms/Passes.h.inc"
 } // namespace mlir
 
@@ -310,7 +310,7 @@ struct ForLoopPeelingPattern : public OpRewritePattern<ForOp> {
 
 namespace {
 struct ParallelLoopSpecialization
-    : public impl::SCFParallelLoopSpecializationBase<
+    : public impl::SCFParallelLoopSpecializationPassBase<
           ParallelLoopSpecialization> {
   void runOnOperation() override {
     getOperation()->walk(
@@ -319,13 +319,15 @@ struct ParallelLoopSpecialization
 };
 
 struct ForLoopSpecialization
-    : public impl::SCFForLoopSpecializationBase<ForLoopSpecialization> {
+    : public impl::SCFForLoopSpecializationPassBase<ForLoopSpecialization> {
   void runOnOperation() override {
     getOperation()->walk([](ForOp op) { specializeForLoopForUnrolling(op); });
   }
 };
 
-struct ForLoopPeeling : public impl::SCFForLoopPeelingBase<ForLoopPeeling> {
+struct ForLoopPeeling : public impl::SCFForLoopPeelingPassBase<ForLoopPeeling> {
+  using Base::Base;
+
   void runOnOperation() override {
     auto *parentOp = getOperation();
     MLIRContext *ctx = parentOp->getContext();
@@ -341,15 +343,3 @@ struct ForLoopPeeling : public impl::SCFForLoopPeelingBase<ForLoopPeeling> {
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> mlir::createParallelLoopSpecializationPass() {
-  return std::make_unique<ParallelLoopSpecialization>();
-}
-
-std::unique_ptr<Pass> mlir::createForLoopSpecializationPass() {
-  return std::make_unique<ForLoopSpecialization>();
-}
-
-std::unique_ptr<Pass> mlir::createForLoopPeelingPass() {
-  return std::make_unique<ForLoopPeeling>();
-}

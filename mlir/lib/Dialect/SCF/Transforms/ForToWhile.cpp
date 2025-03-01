@@ -19,7 +19,7 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 namespace mlir {
-#define GEN_PASS_DEF_SCFFORTOWHILELOOP
+#define GEN_PASS_DEF_SCFFORTOWHILELOOPPASS
 #include "mlir/Dialect/SCF/Transforms/Passes.h.inc"
 } // namespace mlir
 
@@ -106,7 +106,7 @@ struct ForLoopLoweringPattern : public OpRewritePattern<ForOp> {
   }
 };
 
-struct ForToWhileLoop : public impl::SCFForToWhileLoopBase<ForToWhileLoop> {
+struct ForToWhileLoop : public impl::SCFForToWhileLoopPassBase<ForToWhileLoop> {
   void runOnOperation() override {
     auto *parentOp = getOperation();
     MLIRContext *ctx = parentOp->getContext();
@@ -116,7 +116,3 @@ struct ForToWhileLoop : public impl::SCFForToWhileLoopBase<ForToWhileLoop> {
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> mlir::createForToWhileLoopPass() {
-  return std::make_unique<ForToWhileLoop>();
-}

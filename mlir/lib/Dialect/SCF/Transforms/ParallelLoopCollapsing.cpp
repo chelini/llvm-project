@@ -17,7 +17,7 @@
 #include "llvm/Support/Debug.h"
 
 namespace mlir {
-#define GEN_PASS_DEF_TESTSCFPARALLELLOOPCOLLAPSING
+#define GEN_PASS_DEF_TESTSCFPARALLELLOOPCOLLAPSINGPASS
 #include "mlir/Dialect/SCF/Transforms/Passes.h.inc"
 } // namespace mlir
 
@@ -27,8 +27,9 @@ using namespace mlir;
 
 namespace {
 struct TestSCFParallelLoopCollapsing
-    : public impl::TestSCFParallelLoopCollapsingBase<
+    : public impl::TestSCFParallelLoopCollapsingPassBase<
           TestSCFParallelLoopCollapsing> {
+  using Base::Base;
 
   void runOnOperation() override {
     Operation *module = getOperation();
@@ -105,7 +106,3 @@ struct TestSCFParallelLoopCollapsing
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> mlir::createTestSCFParallelLoopCollapsingPass() {
-  return std::make_unique<TestSCFParallelLoopCollapsing>();
-}

@@ -13,17 +13,14 @@ include "mlir/Pass/PassBase.td"
 
 // Note: Making these canonicalization patterns would require a dependency
 // of the SCF dialect on the Affine/Tensor/MemRef dialects or vice versa.
-def SCFForLoopCanonicalization
-    : Pass<"scf-for-loop-canonicalization"> {
+def SCFForLoopCanonicalizationPass : Pass<"scf-for-loop-canonicalization"> {
   let summary = "Canonicalize operations within scf.for loop bodies";
-  let constructor = "mlir::createSCFForLoopCanonicalizationPass()";
   let dependentDialects = ["affine::AffineDialect", "tensor::TensorDialect",
                            "memref::MemRefDialect"];
 }
 
-def SCFForLoopPeeling : Pass<"scf-for-loop-peeling"> {
+def SCFForLoopPeelingPass : Pass<"scf-for-loop-peeling"> {
   let summary = "Peel `for` loops at their upper bounds.";
-  let constructor = "mlir::createForLoopPeelingPass()";
   let options = [
     Option<"peelFront", "peel-front", "bool",
            /*default=*/"false",
@@ -36,19 +33,17 @@ def SCFForLoopPeeling : Pass<"scf-for-loop-peeling"> {
   let dependentDialects = ["affine::AffineDialect"];
 }
 
-def SCFForLoopSpecialization : Pass<"scf-for-loop-specialization"> {
+def SCFForLoopSpecializationPass : Pass<"scf-for-loop-specialization"> {
   let summary = "Specialize `for` loops for vectorization";
-  let constructor = "mlir::createForLoopSpecializationPass()";
 }
 
-def SCFParallelLoopFusion : Pass<"scf-parallel-loop-fusion"> {
+def SCFParallelLoopFusionPass : Pass<"scf-parallel-loop-fusion"> {
   let summary = "Fuse adjacent parallel loops";
-  let constructor = "mlir::createParallelLoopFusionPass()";
 }
 
-def TestSCFParallelLoopCollapsing : Pass<"test-scf-parallel-loop-collapsing"> {
+def TestSCFParallelLoopCollapsingPass
+    : Pass<"test-scf-parallel-loop-collapsing"> {
   let summary = "Test parallel loops collapsing transformation";
-  let constructor = "mlir::createTestSCFParallelLoopCollapsingPass()";
   let dependentDialects = ["affine::AffineDialect"];
   let description = [{
       This pass is purely for testing the scf::collapseParallelLoops
@@ -89,15 +84,13 @@ def TestSCFParallelLoopCollapsing : Pass<"test-scf-parallel-loop-collapsing"> {
   ];
 }
 
-def SCFParallelLoopSpecialization
+def SCFParallelLoopSpecializationPass
     : Pass<"scf-parallel-loop-specialization"> {
   let summary = "Specialize parallel loops for vectorization";
-  let constructor = "mlir::createParallelLoopSpecializationPass()";
 }
 
-def SCFParallelLoopTiling : Pass<"scf-parallel-loop-tiling"> {
+def SCFParallelLoopTilingPass : Pass<"scf-parallel-loop-tiling"> {
   let summary = "Tile parallel loops";
-  let constructor = "mlir::createParallelLoopTilingPass()";
   let options = [
     ListOption<"tileSizes", "parallel-loop-tile-sizes", "int64_t",
                "Factors to tile parallel loops by">,
@@ -109,24 +102,20 @@ def SCFParallelLoopTiling : Pass<"scf-parallel-loop-tiling"> {
   let dependentDialects = ["affine::AffineDialect"];
 }
 
-def SCFForLoopRangeFolding : Pass<"scf-for-loop-range-folding"> {
+def SCFForLoopRangeFoldingPass : Pass<"scf-for-loop-range-folding"> {
   let summary = "Fold add/mul ops into loop range";
-  let constructor = "mlir::createForLoopRangeFoldingPass()";
 }
 
-def SCFForallToForLoop : Pass<"scf-forall-to-for"> {
+def SCFForallToForLoopPass : Pass<"scf-forall-to-for"> {
   let summary = "Convert SCF forall loops to SCF for loops";
-  let constructor = "mlir::createForallToForLoopPass()";
 }
 
-def SCFForallToParallelLoop : Pass<"scf-forall-to-parallel"> {
+def SCFForallToParallelLoopPass : Pass<"scf-forall-to-parallel"> {
   let summary = "Convert SCF forall loops to SCF parallel loops";
-  let constructor = "mlir::createForallToParallelLoopPass()";
 }
 
-def SCFForToWhileLoop : Pass<"scf-for-to-while"> {
+def SCFForToWhileLoopPass : Pass<"scf-for-to-while"> {
   let summary = "Convert SCF for loops to SCF while loops";
-  let constructor = "mlir::createForToWhileLoopPass()";
   let description = [{
     This pass transforms SCF.ForOp operations to SCF.WhileOp. The For loop
     condition is placed in the 'before' region of the while operation, and the

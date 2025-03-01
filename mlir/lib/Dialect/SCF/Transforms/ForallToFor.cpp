@@ -17,7 +17,7 @@
 #include "mlir/IR/PatternMatch.h"
 
 namespace mlir {
-#define GEN_PASS_DEF_SCFFORALLTOFORLOOP
+#define GEN_PASS_DEF_SCFFORALLTOFORLOOPPASS
 #include "mlir/Dialect/SCF/Transforms/Passes.h.inc"
 } // namespace mlir
 
@@ -55,7 +55,8 @@ mlir::scf::forallToForLoop(RewriterBase &rewriter, scf::ForallOp forallOp,
 }
 
 namespace {
-struct ForallToForLoop : public impl::SCFForallToForLoopBase<ForallToForLoop> {
+struct ForallToForLoop
+    : public impl::SCFForallToForLoopPassBase<ForallToForLoop> {
   void runOnOperation() override {
     Operation *parentOp = getOperation();
     IRRewriter rewriter(parentOp->getContext());
@@ -68,7 +69,3 @@ struct ForallToForLoop : public impl::SCFForallToForLoopBase<ForallToForLoop> {
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> mlir::createForallToForLoopPass() {
-  return std::make_unique<ForallToForLoop>();
-}

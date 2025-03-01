@@ -19,7 +19,7 @@
 #include "mlir/IR/IRMapping.h"
 
 namespace mlir {
-#define GEN_PASS_DEF_SCFFORLOOPRANGEFOLDING
+#define GEN_PASS_DEF_SCFFORLOOPRANGEFOLDINGPASS
 #include "mlir/Dialect/SCF/Transforms/Passes.h.inc"
 } // namespace mlir
 
@@ -28,7 +28,7 @@ using namespace mlir::scf;
 
 namespace {
 struct ForLoopRangeFolding
-    : public impl::SCFForLoopRangeFoldingBase<ForLoopRangeFolding> {
+    : public impl::SCFForLoopRangeFoldingPassBase<ForLoopRangeFolding> {
   void runOnOperation() override;
 };
 } // namespace
@@ -86,8 +86,4 @@ void ForLoopRangeFolding::runOnOperation() {
       user->erase();
     }
   });
-}
-
-std::unique_ptr<Pass> mlir::createForLoopRangeFoldingPass() {
-  return std::make_unique<ForLoopRangeFolding>();
 }

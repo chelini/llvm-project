@@ -19,7 +19,7 @@
 #include "mlir/Dialect/SCF/Utils/Utils.h"
 
 namespace mlir {
-#define GEN_PASS_DEF_SCFPARALLELLOOPTILING
+#define GEN_PASS_DEF_SCFPARALLELLOOPTILINGPASS
 #include "mlir/Dialect/SCF/Transforms/Passes.h.inc"
 } // namespace mlir
 
@@ -191,13 +191,8 @@ mlir::scf::tileParallelLoop(ParallelOp op, ArrayRef<int64_t> tileSizes,
 
 namespace {
 struct ParallelLoopTiling
-    : public impl::SCFParallelLoopTilingBase<ParallelLoopTiling> {
-  ParallelLoopTiling() = default;
-  explicit ParallelLoopTiling(ArrayRef<int64_t> tileSizes,
-                              bool noMinMaxBounds = false) {
-    this->tileSizes = tileSizes;
-    this->noMinMaxBounds = noMinMaxBounds;
-  }
+    : public impl::SCFParallelLoopTilingPassBase<ParallelLoopTiling> {
+  using Base::Base;
 
   void runOnOperation() override {
     for (auto tileSize : tileSizes)
@@ -217,9 +212,3 @@ struct ParallelLoopTiling
   }
 };
 } // namespace
-
-std::unique_ptr<Pass>
-mlir::createParallelLoopTilingPass(ArrayRef<int64_t> tileSizes,
-                                   bool noMinMaxBounds) {
-  return std::make_unique<ParallelLoopTiling>(tileSizes, noMinMaxBounds);
-}

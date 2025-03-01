@@ -24,7 +24,7 @@
 #include "llvm/ADT/TypeSwitch.h"
 
 namespace mlir {
-#define GEN_PASS_DEF_SCFFORLOOPCANONICALIZATION
+#define GEN_PASS_DEF_SCFFORLOOPCANONICALIZATIONPASS
 #include "mlir/Dialect/SCF/Transforms/Passes.h.inc"
 } // namespace mlir
 
@@ -161,7 +161,8 @@ struct AffineOpSCFCanonicalizationPattern : public OpRewritePattern<OpTy> {
 };
 
 struct SCFForLoopCanonicalization
-    : public impl::SCFForLoopCanonicalizationBase<SCFForLoopCanonicalization> {
+    : public impl::SCFForLoopCanonicalizationPassBase<
+          SCFForLoopCanonicalization> {
   void runOnOperation() override {
     auto *parentOp = getOperation();
     MLIRContext *ctx = parentOp->getContext();
@@ -182,8 +183,4 @@ void mlir::scf::populateSCFForLoopCanonicalizationPatterns(
            DimOfIterArgFolder<tensor::DimOp>, DimOfIterArgFolder<memref::DimOp>,
            DimOfLoopResultFolder<tensor::DimOp>,
            DimOfLoopResultFolder<memref::DimOp>>(ctx);
-}
-
-std::unique_ptr<Pass> mlir::createSCFForLoopCanonicalizationPass() {
-  return std::make_unique<SCFForLoopCanonicalization>();
 }
