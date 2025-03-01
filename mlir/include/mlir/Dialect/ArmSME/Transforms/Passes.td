@@ -58,7 +58,7 @@ def ArmZaMode : I32EnumAttr<"ArmZaMode", "Armv9 ZA storage mode",
   let genSpecializedAttr = 0;
 }
 
-def EnableArmStreaming
+def EnableArmStreamingPass
     : Pass<"enable-arm-streaming", "mlir::func::FuncOp"> {
   let summary = "Enable Armv9 Streaming SVE mode";
   let description = [{
@@ -67,7 +67,6 @@ def EnableArmStreaming
 
     [1] https://developer.arm.com/documentation/ddi0616/aa
   }];
-  let constructor = "mlir::arm_sme::createEnableArmStreamingPass()";
   let options = [
     Option<"streamingMode", "streaming-mode", "mlir::arm_sme::ArmStreamingMode",
           /*default=*/"mlir::arm_sme::ArmStreamingMode::Streaming",
@@ -149,7 +148,7 @@ def TestTileAllocation
   let dependentDialects = ["func::FuncDialect", "arm_sme::ArmSMEDialect"];
 }
 
-def OuterProductFusion
+def OuterProductFusionPass
     : Pass<"arm-sme-outer-product-fusion", "mlir::func::FuncOp"> {
   let summary = "Fuse 'arm_sme.outerproduct' operations into 2-way or 4-way widening variants";
   let description = [{
@@ -179,12 +178,11 @@ def OuterProductFusion
     https://mlir.llvm.org/docs/Dialects/ArmSME/#arm_smefmopa_2way-arm_smefmopa_2wayop
     https://mlir.llvm.org/docs/Dialects/ArmSME/#arm_smesmopa_4way-arm_smesmopa_4wayop
   }];
-  let constructor = "mlir::arm_sme::createOuterProductFusionPass()";
   let dependentDialects = ["func::FuncDialect", "arm_sme::ArmSMEDialect"];
 }
 
-def VectorLegalization
-  : Pass<"arm-sme-vector-legalization", "mlir::ModuleOp"> {
+def VectorLegalizationPass
+    : Pass<"arm-sme-vector-legalization", "mlir::ModuleOp"> {
   let summary = "Legalize vectors for ArmSME";
   let description = [{
     This pass legalizes vector operations so that they can be lowered to ArmSME.
@@ -197,7 +195,6 @@ def VectorLegalization
     multiple of SME tiles. That is scalable in two dimensions, with both the
     rows and columns divisible by the SVE vector length for the element type.
   }];
-  let constructor = "mlir::arm_sme::createVectorLegalizationPass()";
   let dependentDialects = [
     "func::FuncDialect",
     "arm_sme::ArmSMEDialect",

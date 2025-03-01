@@ -17,9 +17,6 @@ namespace mlir::arm_sve {
 #define GEN_PASS_DECL
 #include "mlir/Dialect/ArmSVE/Transforms/Passes.h.inc"
 
-/// Pass to legalize Arm SVE vector storage.
-std::unique_ptr<Pass> createLegalizeVectorStoragePass();
-
 /// Collect a set of patterns to legalize Arm SVE vector storage.
 void populateLegalizeVectorStoragePatterns(RewritePatternSet &patterns);
 

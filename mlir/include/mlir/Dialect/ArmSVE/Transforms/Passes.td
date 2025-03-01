@@ -11,7 +11,7 @@
 
 include "mlir/Pass/PassBase.td"
 
-def LegalizeVectorStorage
+def LegalizeVectorStoragePass
     : Pass<"arm-sve-legalize-vector-storage", "mlir::func::FuncOp"> {
   let summary = "Ensures stores of SVE vector types will be legal";
   let description = [{
@@ -59,7 +59,6 @@ def LegalizeVectorStorage
     16-byte alignment for SVE vectors on the stack. Explicitly setting a smaller
     alignment prevents this issue.
   }];
-  let constructor = "mlir::arm_sve::createLegalizeVectorStoragePass()";
   let dependentDialects = ["func::FuncDialect",
     "memref::MemRefDialect", "vector::VectorDialect",
     "arm_sve::ArmSVEDialect"];

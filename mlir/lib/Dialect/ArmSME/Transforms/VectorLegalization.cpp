@@ -31,7 +31,7 @@
 #define DEBUG_TYPE "arm-sme-vector-legalization"
 
 namespace mlir::arm_sme {
-#define GEN_PASS_DEF_VECTORLEGALIZATION
+#define GEN_PASS_DEF_VECTORLEGALIZATIONPASS
 #include "mlir/Dialect/ArmSME/Transforms/Passes.h.inc"
 } // namespace mlir::arm_sme
 
@@ -921,7 +921,7 @@ struct LowerIllegalTransposeStoreViaZA
 };
 
 struct VectorLegalizationPass
-    : public arm_sme::impl::VectorLegalizationBase<VectorLegalizationPass> {
+    : public arm_sme::impl::VectorLegalizationPassBase<VectorLegalizationPass> {
   void runOnOperation() override {
     auto *context = &getContext();
     TypeConverter converter;
@@ -978,7 +978,3 @@ struct VectorLegalizationPass
 };
 
 } // namespace
-
-std::unique_ptr<Pass> mlir::arm_sme::createVectorLegalizationPass() {
-  return std::make_unique<VectorLegalizationPass>();
-}

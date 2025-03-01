@@ -14,7 +14,7 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 namespace mlir::arm_sve {
-#define GEN_PASS_DEF_LEGALIZEVECTORSTORAGE
+#define GEN_PASS_DEF_LEGALIZEVECTORSTORAGEPASS
 #include "mlir/Dialect/ArmSVE/Transforms/Passes.h.inc"
 } // namespace mlir::arm_sve
 
@@ -312,7 +312,8 @@ void mlir::arm_sve::populateLegalizeVectorStoragePatterns(
 
 namespace {
 struct LegalizeVectorStorage
-    : public arm_sve::impl::LegalizeVectorStorageBase<LegalizeVectorStorage> {
+    : public arm_sve::impl::LegalizeVectorStoragePassBase<
+          LegalizeVectorStorage> {
 
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
@@ -332,7 +333,3 @@ struct LegalizeVectorStorage
 };
 
 } // namespace
-
-std::unique_ptr<Pass> mlir::arm_sve::createLegalizeVectorStoragePass() {
-  return std::make_unique<LegalizeVectorStorage>();
-}

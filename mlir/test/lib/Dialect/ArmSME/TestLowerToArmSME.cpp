@@ -72,9 +72,11 @@ void buildTestLowerToArmSME(OpPassManager &pm,
       VectorTransferToSCFOptions().enableFullUnroll()));
 
   // Enable streaming-mode and ZA.
-  pm.addPass(arm_sme::createEnableArmStreamingPass(
+  arm_sme::EnableArmStreamingPassOptions enableArmStreamingPassOptions = {
       arm_sme::ArmStreamingMode::StreamingLocally, arm_sme::ArmZaMode::NewZA,
-      /*ifRequiredByOps=*/true));
+      /*ifRequiredByOps=*/true, /*ifScalableAndSupported=*/false};
+  pm.addPass(
+      arm_sme::createEnableArmStreamingPass(enableArmStreamingPassOptions));
 
   // Convert SCF to CF (required for ArmSME tile allocation).
   pm.addPass(createSCFToControlFlowPass());

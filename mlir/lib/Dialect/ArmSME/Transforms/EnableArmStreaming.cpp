@@ -43,7 +43,7 @@
 
 namespace mlir {
 namespace arm_sme {
-#define GEN_PASS_DEF_ENABLEARMSTREAMING
+#define GEN_PASS_DEF_ENABLEARMSTREAMINGPASS
 #include "mlir/Dialect/ArmSME/Transforms/Passes.h.inc"
 } // namespace arm_sme
 } // namespace mlir
@@ -67,14 +67,9 @@ bool isScalableVector(Type type) {
 }
 
 struct EnableArmStreamingPass
-    : public arm_sme::impl::EnableArmStreamingBase<EnableArmStreamingPass> {
-  EnableArmStreamingPass(ArmStreamingMode streamingMode, ArmZaMode zaMode,
-                         bool ifRequiredByOps, bool ifScalableAndSupported) {
-    this->streamingMode = streamingMode;
-    this->zaMode = zaMode;
-    this->ifRequiredByOps = ifRequiredByOps;
-    this->ifScalableAndSupported = ifScalableAndSupported;
-  }
+    : public arm_sme::impl::EnableArmStreamingPassBase<EnableArmStreamingPass> {
+  using Base::Base;
+
   void runOnOperation() override {
     auto function = getOperation();
 
@@ -139,10 +134,3 @@ struct EnableArmStreamingPass
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> mlir::arm_sme::createEnableArmStreamingPass(
-    const ArmStreamingMode streamingMode, const ArmZaMode zaMode,
-    bool ifRequiredByOps, bool ifScalableAndSupported) {
-  return std::make_unique<EnableArmStreamingPass>(
-      streamingMode, zaMode, ifRequiredByOps, ifScalableAndSupported);
-}

@@ -22,7 +22,7 @@
 #define DEBUG_TYPE "arm-sme-outerproduct-fusion"
 
 namespace mlir::arm_sme {
-#define GEN_PASS_DEF_OUTERPRODUCTFUSION
+#define GEN_PASS_DEF_OUTERPRODUCTFUSIONPASS
 #include "mlir/Dialect/ArmSME/Transforms/Passes.h.inc"
 } // namespace mlir::arm_sme
 
@@ -517,7 +517,7 @@ struct SwapVectorScalableExtractOfArithExtend
 };
 
 struct OuterProductFusionPass
-    : public arm_sme::impl::OuterProductFusionBase<OuterProductFusionPass> {
+    : public arm_sme::impl::OuterProductFusionPassBase<OuterProductFusionPass> {
 
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
@@ -537,8 +537,4 @@ void mlir::arm_sme::populateOuterProductFusionPatterns(
   patterns.add<SwapVectorExtractOfArithExtend,
                SwapVectorScalableExtractOfArithExtend>(context, 1024);
   patterns.add<OuterProductFusion2Way, OuterProductFusion4Way>(context);
-}
-
-std::unique_ptr<Pass> mlir::arm_sme::createOuterProductFusionPass() {
-  return std::make_unique<OuterProductFusionPass>();
 }
