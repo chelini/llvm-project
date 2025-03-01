@@ -14,12 +14,9 @@
 namespace mlir {
 namespace tensor {
 
-//===----------------------------------------------------------------------===//
-// Passes
-//===----------------------------------------------------------------------===//
-
-/// Creates an instance of the `tensor` subset folding pass.
-std::unique_ptr<Pass> createFoldTensorSubsetOpsPass();
+/// Generate the code for declaring passes.
+#define GEN_PASS_DECL_FOLDTENSORSUBSETOPSPASS
+#include "mlir/Dialect/Arith/Transforms/Passes.h.inc"
 
 //===----------------------------------------------------------------------===//
 // Registration
