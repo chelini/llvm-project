@@ -21,7 +21,7 @@
 
 namespace mlir {
 namespace vector {
-#define GEN_PASS_DEF_LOWERVECTORMULTIREDUCTION
+#define GEN_PASS_DEF_LOWERVECTORMULTIREDUCTIONPASS
 #include "mlir/Dialect/Vector/Transforms/Passes.h.inc"
 } // namespace vector
 } // namespace mlir
@@ -484,11 +484,9 @@ struct OneDimMultiReductionToTwoDim
 };
 
 struct LowerVectorMultiReductionPass
-    : public vector::impl::LowerVectorMultiReductionBase<
+    : public vector::impl::LowerVectorMultiReductionPassBase<
           LowerVectorMultiReductionPass> {
-  LowerVectorMultiReductionPass(vector::VectorMultiReductionLowering option) {
-    this->loweringStrategy = option;
-  }
+  using Base::Base;
 
   void runOnOperation() override {
     Operation *op = getOperation();
@@ -521,9 +519,4 @@ void mlir::vector::populateVectorMultiReductionLoweringPatterns(
   else
     patterns.add<TwoDimMultiReductionToElementWise>(patterns.getContext(),
                                                     benefit);
-}
-
-std::unique_ptr<Pass> vector::createLowerVectorMultiReductionPass(
-    vector::VectorMultiReductionLowering option) {
-  return std::make_unique<LowerVectorMultiReductionPass>(option);
 }

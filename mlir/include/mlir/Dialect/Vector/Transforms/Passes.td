@@ -13,12 +13,11 @@ include "mlir/Pass/PassBase.td"
 
 def LowerVectorMaskPass : Pass<"lower-vector-mask", "func::FuncOp"> {
   let summary = "Lower 'vector.mask' operations";
-  let constructor = "mlir::vector::createLowerVectorMaskPass()";
 }
 
-def LowerVectorMultiReduction : Pass<"lower-vector-multi-reduction", "func::FuncOp"> {
+def LowerVectorMultiReductionPass
+    : Pass<"lower-vector-multi-reduction", "func::FuncOp"> {
   let summary = "Lower 'vector.multi_reduction' operations";
-  let constructor = "mlir::vector::createLowerVectorMultiReductionPass()";
   let options = [
     Option<"loweringStrategy", "lowering-strategy", "mlir::vector::VectorMultiReductionLowering",
            /*default=*/"mlir::vector::VectorMultiReductionLowering::InnerParallel",

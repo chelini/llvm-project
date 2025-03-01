@@ -17,14 +17,6 @@ namespace vector {
 #define GEN_PASS_DECL
 #include "mlir/Dialect/Vector/Transforms/Passes.h.inc"
 
-/// Creates an instance of the `vector.mask` lowering pass.
-std::unique_ptr<Pass> createLowerVectorMaskPass();
-
-/// Creates an instance of the `vector.multi_reduction` lowering pass.
-std::unique_ptr<Pass> createLowerVectorMultiReductionPass(
-    VectorMultiReductionLowering option =
-        VectorMultiReductionLowering::InnerParallel);
-
 //===----------------------------------------------------------------------===//
 // Registration
 //===----------------------------------------------------------------------===//

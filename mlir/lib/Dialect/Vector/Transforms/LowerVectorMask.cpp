@@ -305,7 +305,3 @@ void vector::populateVectorMaskLoweringPatternsForSideEffectingOps(
   patterns.add<MaskedTransferReadOpPattern, MaskedTransferWriteOpPattern,
                MaskedGatherOpPattern>(patterns.getContext());
 }
-
-std::unique_ptr<Pass> mlir::vector::createLowerVectorMaskPass() {
-  return std::make_unique<LowerVectorMaskPass>();
-}
