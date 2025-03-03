@@ -59,7 +59,7 @@
 #include <vector>
 
 namespace mlir {
-#define GEN_PASS_DEF_REMOVEDEADVALUES
+#define GEN_PASS_DEF_REMOVEDEADVALUESPASS
 #include "mlir/Transforms/Passes.h.inc"
 } // namespace mlir
 
@@ -740,7 +740,8 @@ static void cleanUpDeadVals(RDVFinalCleanupList &list) {
   }
 }
 
-struct RemoveDeadValues : public impl::RemoveDeadValuesBase<RemoveDeadValues> {
+struct RemoveDeadValues
+    : public impl::RemoveDeadValuesPassBase<RemoveDeadValues> {
   void runOnOperation() override;
 };
 } // namespace
@@ -776,8 +777,4 @@ void RemoveDeadValues::runOnOperation() {
   });
 
   cleanUpDeadVals(finalCleanupList);
-}
-
-std::unique_ptr<Pass> mlir::createRemoveDeadValuesPass() {
-  return std::make_unique<RemoveDeadValues>();
 }

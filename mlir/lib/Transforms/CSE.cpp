@@ -26,7 +26,7 @@
 #include <deque>
 
 namespace mlir {
-#define GEN_PASS_DEF_CSE
+#define GEN_PASS_DEF_CSEPASS
 #include "mlir/Transforms/Passes.h.inc"
 } // namespace mlir
 
@@ -388,7 +388,9 @@ void mlir::eliminateCommonSubExpressions(RewriterBase &rewriter,
 
 namespace {
 /// CSE pass.
-struct CSE : public impl::CSEBase<CSE> {
+struct CSE : public impl::CSEPassBase<CSE> {
+  using Base::Base;
+
   void runOnOperation() override;
 };
 } // namespace
@@ -412,5 +414,3 @@ void CSE::runOnOperation() {
   // preserved.
   markAnalysesPreserved<DominanceInfo, PostDominanceInfo>();
 }
-
-std::unique_ptr<Pass> mlir::createCSEPass() { return std::make_unique<CSE>(); }

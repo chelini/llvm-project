@@ -32,19 +32,21 @@ class GreedyRewriteConfig;
 //===----------------------------------------------------------------------===//
 
 #define GEN_PASS_DECL_CANONICALIZER
-#define GEN_PASS_DECL_CONTROLFLOWSINK
+#define GEN_PASS_DECL_CONTROLFLOWSINKPASS
 #define GEN_PASS_DECL_CSE
 #define GEN_PASS_DECL_INLINER
-#define GEN_PASS_DECL_LOOPINVARIANTCODEMOTION
+#define GEN_PASS_DECL_LOOPINVARIANTCODEMOTIONPASS
+#define GEN_PASS_DECL_LOOPINVARIANTSUBSETHOISTINGPASS
 #define GEN_PASS_DECL_MEM2REG
 #define GEN_PASS_DECL_PRINTIRPASS
 #define GEN_PASS_DECL_PRINTOPSTATS
+#define GEN_PASS_DECL_REMOVEDEADVALUESPASS
 #define GEN_PASS_DECL_SROA
-#define GEN_PASS_DECL_STRIPDEBUGINFO
-#define GEN_PASS_DECL_SCCP
-#define GEN_PASS_DECL_SYMBOLDCE
-#define GEN_PASS_DECL_SYMBOLPRIVATIZE
-#define GEN_PASS_DECL_TOPOLOGICALSORT
+#define GEN_PASS_DECL_STRIPDEBUGINFOPASS
+#define GEN_PASS_DECL_SCCPPASS
+#define GEN_PASS_DECL_SYMBOLDCEPASS
+#define GEN_PASS_DECL_SYMBOLPRIVATIZEPASS
+#define GEN_PASS_DECL_TOPOLOGICALSORTPASS
 #define GEN_PASS_DECL_COMPOSITEFIXEDPOINTPASS
 #include "mlir/Transforms/Passes.h.inc"
 
@@ -65,14 +67,8 @@ createCanonicalizerPass(const GreedyRewriteConfig &config,
                         ArrayRef<std::string> disabledPatterns = std::nullopt,
                         ArrayRef<std::string> enabledPatterns = std::nullopt);
 
-/// Creates a pass to perform control-flow sinking.
-std::unique_ptr<Pass> createControlFlowSinkPass();
-
 /// Creates a pass to perform common sub expression elimination.
 std::unique_ptr<Pass> createCSEPass();
-
-/// Creates a pass to print IR on the debug stream.
-std::unique_ptr<Pass> createPrintIRPass(const PrintIRPassOptions & = {});
 
 /// Creates a pass that generates IR to verify ops at runtime.
 std::unique_ptr<Pass> createGenerateRuntimeVerificationPass();
@@ -80,12 +76,6 @@ std::unique_ptr<Pass> createGenerateRuntimeVerificationPass();
 /// Creates a loop invariant code motion pass that hoists loop invariant
 /// instructions out of the loop.
 std::unique_ptr<Pass> createLoopInvariantCodeMotionPass();
-
-/// Creates a pass that hoists loop-invariant subset ops.
-std::unique_ptr<Pass> createLoopInvariantSubsetHoistingPass();
-
-/// Creates a pass to strip debug information from a function.
-std::unique_ptr<Pass> createStripDebugInfoPass();
 
 /// Creates a pass which prints the list of ops and the number of occurrences in
 /// the module.
@@ -111,22 +101,6 @@ createInlinerPass(llvm::StringMap<OpPassManager> opPipelines);
 std::unique_ptr<Pass>
 createInlinerPass(llvm::StringMap<OpPassManager> opPipelines,
                   std::function<void(OpPassManager &)> defaultPipelineBuilder);
-
-/// Creates an optimization pass to remove dead values.
-std::unique_ptr<Pass> createRemoveDeadValuesPass();
-
-/// Creates a pass which performs sparse conditional constant propagation over
-/// nested operations.
-std::unique_ptr<Pass> createSCCPPass();
-
-/// Creates a pass which delete symbol operations that are unreachable. This
-/// pass may *only* be scheduled on an operation that defines a SymbolTable.
-std::unique_ptr<Pass> createSymbolDCEPass();
-
-/// Creates a pass which marks top-level symbol operations as `private` unless
-/// listed in `excludeSymbols`.
-std::unique_ptr<Pass>
-createSymbolPrivatizePass(ArrayRef<std::string> excludeSymbols = {});
 
 /// Creates a pass that recursively sorts nested regions without SSA dominance
 /// topologically such that, as much as possible, users of values appear after

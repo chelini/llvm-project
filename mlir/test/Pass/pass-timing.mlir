@@ -10,7 +10,7 @@
 // LIST: Total Execution Time:
 // LIST: Name
 // LIST-DAG: Canonicalizer
-// LIST-DAG: CSE
+// LIST-DAG: CSEPass
 // LIST-DAG: DominanceInfo
 // LIST: Total
 
@@ -18,7 +18,7 @@
 // LIST-JSON-NOT: Total Execution Time:
 // LIST-JSON-NOT: Name
 // LIST-JSON-DAG: "name": "Canonicalizer"}
-// LIST-JSON-DAG: "name": "CSE"}
+// LIST-JSON-DAG: "name": "CSEPass"}
 // LIST-JSON-DAG: "name": "(A) DominanceInfo"}
 // LIST-JSON: "name": "Total"}
 
@@ -27,10 +27,10 @@
 // PIPELINE: Name
 // PIPELINE-NEXT: Parser
 // PIPELINE-NEXT: 'func.func' Pipeline
-// PIPELINE-NEXT:   CSE
+// PIPELINE-NEXT:   CSEPass
 // PIPELINE-NEXT:     (A) DominanceInfo
 // PIPELINE-NEXT:   Canonicalizer
-// PIPELINE-NEXT:   CSE
+// PIPELINE-NEXT:   CSEPass
 // PIPELINE-NEXT:     (A) DominanceInfo
 // PIPELINE-NEXT: Output
 // PIPELINE-NEXT: Rest
@@ -42,13 +42,13 @@
 // PIPELINE-JSON:      "name": "Parser", "passes": [
 // PIPELINE-JSON-NEXT: {}]},
 // PIPELINE-JSON-NEXT: "name": "'func.func' Pipeline", "passes": [
-// PIPELINE-JSON-NEXT: "name": "CSE", "passes": [
+// PIPELINE-JSON-NEXT: "name": "CSEPass", "passes": [
 // PIPELINE-JSON-NEXT: "name": "(A) DominanceInfo", "passes": [
 // PIPELINE-JSON-NEXT: {}]},
 // PIPELINE-JSON-NEXT: {}]},
 // PIPELINE-JSON-NEXT: "name": "Canonicalizer", "passes": [
 // PIPELINE-JSON-NEXT: {}]},
-// PIPELINE-JSON-NEXT: "name": "CSE", "passes": [
+// PIPELINE-JSON-NEXT: "name": "CSEPass", "passes": [
 // PIPELINE-JSON-NEXT: "name": "(A) DominanceInfo", "passes": [
 // PIPELINE-JSON-NEXT: {}]},
 // PIPELINE-JSON-NEXT: {}]},
@@ -62,7 +62,7 @@
 // MT_LIST: Total Execution Time:
 // MT_LIST: Name
 // MT_LIST-DAG: Canonicalizer
-// MT_LIST-DAG: CSE
+// MT_LIST-DAG: CSEPass
 // MT_LIST-DAG: DominanceInfo
 // MT_LIST: Total
 
@@ -71,10 +71,10 @@
 // MT_PIPELINE: Name
 // MT_PIPELINE-NEXT: Parser
 // MT_PIPELINE-NEXT: 'func.func' Pipeline
-// MT_PIPELINE-NEXT:   CSE
+// MT_PIPELINE-NEXT:   CSEPass
 // MT_PIPELINE-NEXT:     (A) DominanceInfo
 // MT_PIPELINE-NEXT:   Canonicalizer
-// MT_PIPELINE-NEXT:   CSE
+// MT_PIPELINE-NEXT:   CSEPass
 // MT_PIPELINE-NEXT:     (A) DominanceInfo
 // MT_PIPELINE-NEXT: Output
 // MT_PIPELINE-NEXT: Rest

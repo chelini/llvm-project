@@ -16,14 +16,14 @@
 #include "mlir/IR/SymbolTable.h"
 
 namespace mlir {
-#define GEN_PASS_DEF_SYMBOLDCE
+#define GEN_PASS_DEF_SYMBOLDCEPASS
 #include "mlir/Transforms/Passes.h.inc"
 } // namespace mlir
 
 using namespace mlir;
 
 namespace {
-struct SymbolDCE : public impl::SymbolDCEBase<SymbolDCE> {
+struct SymbolDCE : public impl::SymbolDCEPassBase<SymbolDCE> {
   void runOnOperation() override;
 
   /// Compute the liveness of the symbols within the given symbol table.
@@ -144,8 +144,4 @@ LogicalResult SymbolDCE::computeLiveness(Operation *symbolTableOp,
   }
 
   return success();
-}
-
-std::unique_ptr<Pass> mlir::createSymbolDCEPass() {
-  return std::make_unique<SymbolDCE>();
 }

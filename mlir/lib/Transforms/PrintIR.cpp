@@ -11,13 +11,14 @@
 #include "llvm/Support/Debug.h"
 
 namespace mlir {
-namespace {
 
 #define GEN_PASS_DEF_PRINTIRPASS
 #include "mlir/Transforms/Passes.h.inc"
 
+namespace {
+
 struct PrintIRPass : public impl::PrintIRPassBase<PrintIRPass> {
-  using impl::PrintIRPassBase<PrintIRPass>::PrintIRPassBase;
+  using Base::Base;
 
   void runOnOperation() override {
     llvm::dbgs() << "// -----// IR Dump";
@@ -30,9 +31,5 @@ struct PrintIRPass : public impl::PrintIRPassBase<PrintIRPass> {
 };
 
 } // namespace
-
-std::unique_ptr<Pass> createPrintIRPass(const PrintIRPassOptions &options) {
-  return std::make_unique<PrintIRPass>(options);
-}
 
 } // namespace mlir

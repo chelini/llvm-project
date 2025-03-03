@@ -3,9 +3,9 @@
 
 // CHECK-LABEL: running `TestCompositePass`
 //       CHECK: running `Canonicalizer`
-//       CHECK: running `CSE`
+//       CHECK: running `CSEPass`
 //   CHECK-NOT: running `Canonicalizer`
-//   CHECK-NOT: running `CSE`
+//   CHECK-NOT: running `CSEPass`
 func.func @test() {
   return
 }
@@ -14,11 +14,11 @@ func.func @test() {
 
 // CHECK-LABEL: running `TestCompositePass`
 //       CHECK: running `Canonicalizer`
-//       CHECK: running `CSE`
+//       CHECK: running `CSEPass`
 //       CHECK: running `Canonicalizer`
-//       CHECK: running `CSE`
+//       CHECK: running `CSEPass`
 //   CHECK-NOT: running `Canonicalizer`
-//   CHECK-NOT: running `CSE`
+//   CHECK-NOT: running `CSEPass`
 func.func @test() {
 // this constant will be canonicalized away, causing another pass iteration
   %0 = arith.constant 1.5 : f32
