@@ -64,9 +64,6 @@ enum class SparseEmitStrategy {
 
 void populateSparseAssembler(RewritePatternSet &patterns, bool directOut);
 
-std::unique_ptr<Pass> createSparseAssembler();
-std::unique_ptr<Pass> createSparseAssembler(bool directOut);
-
 //===----------------------------------------------------------------------===//
 // The SparseReinterpretMap pass.
 //===----------------------------------------------------------------------===//
@@ -74,16 +71,11 @@ std::unique_ptr<Pass> createSparseAssembler(bool directOut);
 void populateSparseReinterpretMap(RewritePatternSet &patterns,
                                   ReinterpretMapScope scope);
 
-std::unique_ptr<Pass> createSparseReinterpretMapPass();
-std::unique_ptr<Pass> createSparseReinterpretMapPass(ReinterpretMapScope scope);
-
 //===----------------------------------------------------------------------===//
 // The PreSparsificationRewriting pass.
 //===----------------------------------------------------------------------===//
 
 void populatePreSparsificationRewriting(RewritePatternSet &patterns);
-
-std::unique_ptr<Pass> createPreSparsificationRewritePass();
 
 //===----------------------------------------------------------------------===//
 // The Sparsification pass.
@@ -124,8 +116,6 @@ createSparsificationPass(const SparsificationOptions &options);
 /// Sets up StageSparseOperation rewriting rules.
 void populateStageSparseOperationsPatterns(RewritePatternSet &patterns);
 
-std::unique_ptr<Pass> createStageSparseOperationsPass();
-
 //===----------------------------------------------------------------------===//
 // The LowerSparseOpsToForeach pass.
 //===----------------------------------------------------------------------===//
@@ -133,17 +123,11 @@ std::unique_ptr<Pass> createStageSparseOperationsPass();
 void populateLowerSparseOpsToForeachPatterns(RewritePatternSet &patterns,
                                              bool enableRT, bool enableConvert);
 
-std::unique_ptr<Pass> createLowerSparseOpsToForeachPass();
-std::unique_ptr<Pass> createLowerSparseOpsToForeachPass(bool enableRT,
-                                                        bool enableConvert);
-
 //===----------------------------------------------------------------------===//
 // The LowerForeachToSCF pass.
 //===----------------------------------------------------------------------===//
 
 void populateLowerForeachToSCFPatterns(RewritePatternSet &patterns);
-
-std::unique_ptr<Pass> createLowerForeachToSCFPass();
 
 //===----------------------------------------------------------------------===//
 // The LowerSparseIterationToSCF pass.
@@ -156,8 +140,6 @@ struct SparseIterationTypeConverter : public TypeConverter {
 
 void populateLowerSparseIterationToSCFPatterns(const TypeConverter &converter,
                                                RewritePatternSet &patterns);
-
-std::unique_ptr<Pass> createLowerSparseIterationToSCFPass();
 
 //===----------------------------------------------------------------------===//
 // The SparseTensorConversion pass.
@@ -172,8 +154,6 @@ public:
 /// Sets up sparse tensor conversion rules.
 void populateSparseTensorConversionPatterns(const TypeConverter &typeConverter,
                                             RewritePatternSet &patterns);
-
-std::unique_ptr<Pass> createSparseTensorConversionPass();
 
 //===----------------------------------------------------------------------===//
 // The SparseTensorCodegen pass.
@@ -191,21 +171,12 @@ void populateSparseTensorCodegenPatterns(const TypeConverter &typeConverter,
                                          bool createSparseDeallocs,
                                          bool enableBufferInitialization);
 
-std::unique_ptr<Pass> createSparseTensorCodegenPass();
-std::unique_ptr<Pass>
-createSparseTensorCodegenPass(bool createSparseDeallocs,
-                              bool enableBufferInitialization);
-
 //===----------------------------------------------------------------------===//
 // The SparseBufferRewrite pass.
 //===----------------------------------------------------------------------===//
 
 void populateSparseBufferRewriting(RewritePatternSet &patterns,
                                    bool enableBufferInitialization);
-
-std::unique_ptr<Pass> createSparseBufferRewritePass();
-std::unique_ptr<Pass>
-createSparseBufferRewritePass(bool enableBufferInitialization);
 
 //===----------------------------------------------------------------------===//
 // The SparseVectorization pass.
@@ -216,11 +187,6 @@ void populateSparseVectorizationPatterns(RewritePatternSet &patterns,
                                          bool enableVLAVectorization,
                                          bool enableSIMDIndex32);
 
-std::unique_ptr<Pass> createSparseVectorizationPass();
-std::unique_ptr<Pass> createSparseVectorizationPass(unsigned vectorLength,
-                                                    bool enableVLAVectorization,
-                                                    bool enableSIMDIndex32);
-
 //===----------------------------------------------------------------------===//
 // The SparseGPU pass.
 //===----------------------------------------------------------------------===//
@@ -230,10 +196,6 @@ void populateSparseGPUCodegenPatterns(RewritePatternSet &patterns,
 
 void populateSparseGPULibgenPatterns(RewritePatternSet &patterns,
                                      bool enableRT);
-
-std::unique_ptr<Pass> createSparseGPUCodegenPass();
-std::unique_ptr<Pass> createSparseGPUCodegenPass(unsigned numThreads,
-                                                 bool enableRT);
 
 //===----------------------------------------------------------------------===//
 // The SparseStorageSpecifierToLLVM pass.
@@ -246,7 +208,6 @@ public:
 
 void populateStorageSpecifierToLLVMPatterns(const TypeConverter &converter,
                                             RewritePatternSet &patterns);
-std::unique_ptr<Pass> createStorageSpecifierToLLVMPass();
 
 //===----------------------------------------------------------------------===//
 // The mini-pipeline for sparsification and bufferization.
@@ -265,12 +226,6 @@ std::unique_ptr<Pass> createSparsificationAndBufferizationPass(
     bool enableVLAVectorization, bool enableSIMDIndex32, bool enableGPULibgen,
     SparseEmitStrategy emitStrategy,
     SparseParallelizationStrategy parallelizationStrategy);
-
-//===----------------------------------------------------------------------===//
-// Sparse Iteration Transform Passes
-//===----------------------------------------------------------------------===//
-
-std::unique_ptr<Pass> createSparseSpaceCollapsePass();
 
 //===----------------------------------------------------------------------===//
 // Registration.

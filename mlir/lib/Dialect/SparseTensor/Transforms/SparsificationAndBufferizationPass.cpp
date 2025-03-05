@@ -165,8 +165,10 @@ public:
     {
       OpPassManager pm("builtin.module");
       if (enableGPULibgen)
-        pm.addPass(createSparseGPUCodegenPass(0, enableRuntimeLibrary));
-      pm.addPass(createSparseReinterpretMapPass(ReinterpretMapScope::kAll));
+        pm.addPass(createSparseGPUCodegenPass(SparseGPUCodegenPassOptions{
+            /*numThreads=*/0, enableRuntimeLibrary}));
+      pm.addPass(createSparseReinterpretMapPass(
+          SparseReinterpretMapPassOptions{ReinterpretMapScope::kAll}));
       pm.addPass(createSparsificationPass(sparsificationOptions));
       if (sparsificationOptions.sparseEmitStrategy ==
           SparseEmitStrategy::kSparseIterator) {
@@ -175,22 +177,24 @@ public:
       }
 
       pm.addNestedPass<func::FuncOp>(createStageSparseOperationsPass());
-      pm.addPass(createLowerSparseOpsToForeachPass(enableRuntimeLibrary,
-                                                   /*enableConvert=*/true));
-      pm.addPass(
-          createSparseReinterpretMapPass(ReinterpretMapScope::kExceptGeneric));
+      pm.addPass(createLowerSparseOpsToForeachPass(
+          LowerSparseOpsToForeachPassOptions{enableRuntimeLibrary,
+                                             /*enableConvert=*/true}));
+      pm.addPass(createSparseReinterpretMapPass(SparseReinterpretMapPassOptions{
+          ReinterpretMapScope::kExceptGeneric}));
       pm.addNestedPass<func::FuncOp>(createLowerForeachToSCFPass());
       pm.addPass(mlir::createLoopInvariantCodeMotionPass());
       if (vectorLength > 0) {
-        pm.addPass(createSparseVectorizationPass(
-            vectorLength, enableVLAVectorization, enableSIMDIndex32));
+        pm.addPass(createSparseVectorizationPass(SparseVectorizationPassOptions{
+            vectorLength, enableVLAVectorization, enableSIMDIndex32}));
       }
       if (enableRuntimeLibrary) {
         pm.addPass(createSparseTensorConversionPass());
       } else {
-        pm.addPass(createSparseTensorCodegenPass(createSparseDeallocs,
-                                                 enableBufferInitialization));
-        pm.addPass(createSparseBufferRewritePass(enableBufferInitialization));
+        pm.addPass(createSparseTensorCodegenPass(SparseTensorCodegenPassOptions{
+            createSparseDeallocs, enableBufferInitialization}));
+        pm.addPass(createSparseBufferRewritePass(
+            SparseBufferRewritePassOptions{enableBufferInitialization}));
       }
       if (failed(runPipeline(pm, getOperation())))
         return signalPassFailure();

@@ -14,7 +14,7 @@
 #include "mlir/Dialect/SparseTensor/Transforms/Passes.h"
 
 namespace mlir {
-#define GEN_PASS_DEF_SPARSESPACECOLLAPSE
+#define GEN_PASS_DEF_SPARSESPACECOLLAPSEPASS
 #include "mlir/Dialect/SparseTensor/Transforms/Passes.h.inc"
 } // namespace mlir
 
@@ -164,8 +164,8 @@ void collapseSparseSpace(MutableArrayRef<CollapseSpaceInfo> toCollapse) {
 }
 
 struct SparseSpaceCollapsePass
-    : public impl::SparseSpaceCollapseBase<SparseSpaceCollapsePass> {
-  SparseSpaceCollapsePass() = default;
+    : public impl::SparseSpaceCollapsePassBase<SparseSpaceCollapsePass> {
+  using Base::Base;
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -193,7 +193,3 @@ struct SparseSpaceCollapsePass
 };
 
 } // namespace
-
-std::unique_ptr<Pass> mlir::createSparseSpaceCollapsePass() {
-  return std::make_unique<SparseSpaceCollapsePass>();
-}
